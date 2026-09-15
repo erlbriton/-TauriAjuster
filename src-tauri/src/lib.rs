@@ -10,6 +10,8 @@ use serde::Serialize;
 use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
+// Используем прямую библиотеку serialport для получения списка портов
+use serialport::available_ports;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -111,6 +113,23 @@ fn scan_devices_folder() -> Result<Vec<IniFileInfo>, String> {
     Ok(out)
 }
 
+/// Команда для фронтенда: возвращает список доступных последовательных портов (COM-портов).
+/// Использует библиотеку serialport для нативного сканирования системы.
+#[tauri::command]
+fn list_serial_ports() -> Result<Vec<String>, String> {
+    // Получаем список портов через библиотеку serialport
+    let ports = available_ports()
+        .map_err(|e| format!("Ошибка сканирования портов: {}", e))?;
+
+    // Преобразуем структуру PortInfo в вектор строк (имена портов)
+    let port_names: Vec<String> = ports
+        .into_iter()
+        .map(|p| p.port_name)
+        .collect();
+
+    Ok(port_names)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -121,8 +140,11 @@ pub fn run() {
         // Регистрируем плагин для работы с файловой системой (чтение/запись файлов).
         // Позволяет обойти ограничения браузера и работать с файлами напрямую.
         .plugin(tauri_plugin_fs::init())
-        // Регистрируем команду сканирования папки Devices для фронтенда
-        .invoke_handler(tauri::generate_handler![greet, scan_devices_folder])
+        // Регистрируем команды для фронтенда:
+        // greet — тестовая команда,
+        // scan_devices_folder — сканирование папки Devices,
+        // list_serial_ports — получение списка COM-портов.
+        .invoke_handler(tauri::generate_handler![greet, scan_devices_folder, list_serial_ports])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

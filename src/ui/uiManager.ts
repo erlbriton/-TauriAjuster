@@ -73,7 +73,10 @@ export interface UiManagerDeps {
 }
 
 export function initUI(deps: UiManagerDeps): void {
-    // При каждом старте: доступ к родительской папке (Devices и BackUp) для резервных копий
+    // В Tauri-версии папка Devices автоматически подхватывается автозагрузчиком
+    // (src/core/platform/tauri-autoloader.ts), поэтому диалог выбора при старте не нужен.
+    // Код оставлен закомментированным для возможной браузерной совместимости.
+    /*
     void (async () => {
         console.log('[startup] спрашиваю родительскую папку');
         const ok = await showConfirmDialog(
@@ -81,6 +84,7 @@ export function initUI(deps: UiManagerDeps): void {
         );
         if (ok) await forcePickParentFolder();
     })();
+    */
   const {
     serial, appState, parser, view, buffers,
     setupFileHandling, setupFolderHandling, updateComInterfaceName,
@@ -105,6 +109,57 @@ export function initUI(deps: UiManagerDeps): void {
   const folderDropdown = document.getElementById('folderDropdown') as HTMLElement | null;
   const menuOpenFile = document.getElementById('menuOpenFile') as HTMLElement | null;
   const menuOpenFolder = document.getElementById('menuOpenFolder') as HTMLElement | null;
+
+  // --- Логика динамического обновления списка COM-портов ---
+  if (comSelect) {
+    // Добавляем обработчик события фокуса (клик по списку)
+    comSelect.addEventListener('focus', async () => {
+      try {
+        // Вызываем команду Rust для получения списка доступных портов
+        // Используем глобальный объект __TAURI__, так как withGlobalTauri = true
+        const ports = await window.__TAURI__.core.invoke<string[]>('list_serial_ports');
+
+        // Сохраняем текущее выбранное значение, чтобы не сбрасывать его при обновлении
+        const currentSelection = comSelect.value;
+
+        // Очищаем текущий список опций
+        comSelect.innerHTML = '';
+
+        // Добавляем пустую опцию по умолчанию
+        const defaultOption = document.createElement('option');
+        defaultOption.text = 'Выберите порт';
+        defaultOption.value = '';
+        defaultOption.disabled = true;
+        defaultOption.selected = true;
+        comSelect.add(defaultOption);
+
+        // Заполняем список полученными портами
+        if (ports.length === 0) {
+          const noPortsOption = document.createElement('option');
+          noPortsOption.text = 'Порты не найдены';
+          noPortsOption.disabled = true;
+          comSelect.add(noPortsOption);
+        } else {
+          for (const port of ports) {
+            const option = document.createElement('option');
+            option.value = port;
+            option.text = port;
+            comSelect.add(option);
+
+            // Если ранее был выбран этот порт, восстанавливаем выбор
+            if (port === currentSelection) {
+              option.selected = true;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Ошибка получения списка портов:', error);
+        // В случае ошибки можно показать сообщение пользователю или оставить список пустым
+        comSelect.innerHTML = '<option>Ошибка сканирования</option>';
+      }
+    });
+  }
+  // ---------------------------------------------------------
 
   const restoreConnection = (): void => {
     if (!serial.isConnected) return;
