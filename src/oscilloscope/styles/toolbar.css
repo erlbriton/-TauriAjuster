@@ -1,0 +1,229 @@
+/* --- Top Toolbar --- */
+#toolbar {
+    height: 48px;
+    background-color: #0f0f11;
+    border-bottom: 2px solid #4a4a52;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    gap: 8px;
+    z-index: 10;
+}
+
+.toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.toolbar-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 6px;
+    white-space: nowrap;
+}
+
+.toolbar-btn {
+    height: 32px;
+    min-width: 32px;
+    padding: 0 8px;
+    background-color: #1a1a1c;
+    border: 1px solid #2a2a2c;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.toolbar-btn:hover {
+    background-color: #252528;
+    color: #ffffff;
+    border-color: #3a3a3c;
+}
+
+.toolbar-btn.window-toggle-btn {
+    background-color: rgba(56, 189, 248, 0.1);
+    border-color: #0284c7;
+    color: #38bdf8;
+    font-size: 12px;
+    padding: 0 10px;
+}
+
+.toolbar-btn.window-toggle-btn:hover {
+    background-color: rgba(56, 189, 248, 0.25);
+    border-color: #38bdf8;
+    color: #ffffff;
+}
+
+.toolbar-btn.icon-btn {
+    padding: 0 8px;
+    font-size: 14px;
+    justify-content: center;
+}
+
+.toolbar-btn.icon-btn:hover {
+    background-color: #2a2a30;
+    color: #00d2ff;
+    border-color: #00d2ff;
+}
+
+.toolbar-btn.primary {
+    background-color: #00d2ff;
+    border-color: #00d2ff;
+    color: #000000;
+    font-weight: 700;
+}
+
+.toolbar-btn.primary:hover {
+    background-color: #00b8e6;
+    border-color: #00b8e6;
+}
+
+.toolbar-btn.success {
+    background-color: #10b981;
+    border-color: #10b981;
+    color: #ffffff;
+}
+
+.toolbar-btn.success:hover {
+    background-color: #059669;
+}
+
+/* Кнопка "Экспорт CSV" */
+.toolbar-btn[title="Экспорт CSV"]:not(.active) {
+    background-color: #43b3aa;   /* ← ваш цвет фона */
+    color: #9aa0a6;              /* ← ваш цвет текста */
+}
+
+/* Кнопка "Поиск параметра" */
+.toolbar-btn[title="Поиск параметра"]:not(.active) {
+    background-color: #3a8827;   /* ← ваш цвет фона */
+    color: #9aa0a6;              /* ← ваш цвет текста */
+}
+
+/* Кнопка "Записать весь буфер" */
+.toolbar-btn[title="Записать весь буфер"]:not(.active) {
+    background-color: #f13564;   /* ← ваш цвет фона */
+    color: #9aa0a6;              /* ← ваш цвет текста */
+}
+
+.toolbar-btn.active {
+    background-color: #00d2ff;
+    border-color: #00d2ff;
+    color: #000000;
+    font-weight: 700;
+}
+/* Выключенная кнопка "Развертка" */
+.toolbar-btn[title="Развертка"]:not(.active) {
+    background-color: #8292a1;   /* ← ваш цвет фона */
+    color: #f04539;              /* ← ваш цвет текста */
+}
+
+.toolbar-select {
+    height: 32px;
+    background-color: #1a1a1c;
+    border: 1px solid #2a2a2c;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 11px;
+    padding: 0 6px;
+    outline: none;
+    cursor: pointer;
+}
+
+.toolbar-select:hover {
+    border-color: #3a3a3c;
+}
+
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.status-badge.connected {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.status-badge.simulating {
+    background-color: rgba(0, 210, 255, 0.15);
+    color: #00d2ff;
+    border: 1px solid rgba(0, 210, 255, 0.3);
+}
+
+.status-badge.recording {
+    background-color: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+/* Автомасштабирование: зелёная — включено, красная — выключено */
+.toolbar-btn.autoscale-on {
+    background-color: #16a34a !important;
+    border-color: #15803d !important;
+    color: #ffffff !important;
+}
+
+.toolbar-btn.autoscale-off {
+    background-color: #dc2626 !important;
+    border-color: #b91c1c !important;
+    color: #ffffff !important;
+}
+/* Баннер с коротким ID контроллера в шапке осциллографа.
+   Стоит СРАЗУ ПОСЛЕ кнопок (не прижат к правому краю).
+   При нехватке места просто обрезается многоточием. */
+.osc-id-banner {
+    margin-left: 8px;      /* небольшой отступ от последней кнопки */
+    flex: 0 1 auto;        /* не растягивается, но РАЗРЕШЕНО сжиматься */
+    min-width: 0;          /* критично: позволяет сжиматься меньше ширины текста */
+    padding: 6px 12px;
+    background-color: rgba(30, 30, 30, 0.8);
+    border: 2px solid #c0e1e9;
+    border-radius: 6px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: #c0e1e9;
+    white-space: nowrap;      /* текст в одну строку */
+    overflow: hidden;         /* всё, что не влезло, скрываем */
+    text-overflow: ellipsis;  /* ... в конце при обрезке */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Контейнер тулбара: элементы в одну строку, лишнее не вылезает наружу */
+#toolbar {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    overflow: hidden;
+}
+
+/* Группа кнопок не сжимается и не переносится — сжимается только баннер */
+#toolbar .toolbar-group {
+    flex-shrink: 0;
+}

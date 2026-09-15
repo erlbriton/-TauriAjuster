@@ -1,0 +1,195 @@
+/* ============================================================================
+   Встроенный редактор INI-файла (модальное окно поверх приложения)
+   ============================================================================ */
+
+/* --- Затемняющая подложка поверх всего приложения, пока открыт редактор --- */
+.ini-editor-overlay {
+    position: fixed !important;         /* Позиционирование относительно окна браузера */
+    inset: 0 !important;                /* Растянуть на все 4 стороны окна (top/right/bottom/left = 0) */
+    z-index: 11000 !important;          /* Поверх всех остальных элементов интерфейса */
+    background: rgba(212, 210, 210, 0.45) !important; /* Полупрозрачное чёрное затемнение (45%) */
+    display: flex !important;           /* Flex-раскладка для центрирования окна */
+    align-items: center !important;     /* Центрирование окна по вертикали */
+    justify-content: center !important; /* Центрирование окна по горизонтали */
+}
+
+/* Состояние "редактор закрыт" */
+.ini-editor-overlay.hidden {
+    display: none !important;           /* Подложка полностью скрыта */
+}
+
+/* --- Само окно редактора --- */
+.ini-editor-window {
+    width: calc(100% - 40px) !important;  /* Ширина: всё окно минус 20px слева и 20px справа */
+    max-width: none !important;           /* Отключить ограничение максимальной ширины */
+    height: calc(100% - 40px) !important; /* Высота: всё окно минус 20px сверху и 20px снизу */
+    background: #f0f0f0 !important;       /* Светло-серый фон окна */
+    border: none !important;              /* Без рамки */
+    border-radius: 0 !important;          /* Без скруглений (НО ниже дубль 4px — побеждает он) */
+    box-shadow: none !important;          /* Без тени */
+    display: flex !important;             /* Flex-колонка: шапка / редактор / кнопки */
+    flex-direction: column !important;    /* Элементы друг под другом */
+    padding: 0 !important;                /* Без внутренних отступов окна */
+    margin: 0 !important;                 /* Без внешних отступов */
+    color: #333333 !important;            /* Цвет текста по умолчанию внутри окна */
+    border-radius: 4px !important;        /* ДУБЛЬ: итоговое скругление углов = 4px */
+}
+
+/* --- Шапка окна с названием файла --- */
+.ini-editor-header {
+    padding: 8px 12px !important;         /* Отступы: 8px сверху/снизу, 12px слева/справа */
+    background: #d8d8d8 !important;       /* Серый фон шапки */
+    border-bottom: 1px solid #bbb !important; /* Линия-разделитель под шапкой */
+    font-family: 'Segoe UI', Arial, sans-serif !important; /* Шрифт заголовка */
+    font-size: 13px !important;           /* Кегль заголовка */
+    font-weight: 600 !important;          /* Полужирное начертание */
+    color: #333333 !important;            /* Цвет текста заголовка */
+    margin: 0 !important;                 /* Без внешних отступов */
+}
+
+/* --- Область редактора (контейнер CodeMirror): СВЕТЛЫЙ вариант, основной --- */
+.ini-editor-text {
+    flex: 1 !important;                   /* Занимает всё место между шапкой и панелью кнопок */
+    width: 100% !important;               /* Во всю ширину окна */
+    margin: 0 !important;                 /* Без внешних отступов */
+    padding: 8px !important;              /* Внутренний отступ контейнера */
+    border: none !important;              /* Без рамки (перебивает рамку из тёмного блока ниже) */
+    outline: none !important;             /* Без контура фокуса */
+    resize: none !important;              /* Запрет ручного изменения размера (наследие textarea) */
+    background: #ffffff !important;       /* БЕЛЫЙ фон контейнера (перебивает #1e1e1e ниже) */
+    color: #000000 !important;            /* ЧЁРНЫЙ текст по умолчанию (перебивает #d4d4d4 ниже) */
+    font-family: Consolas, 'Courier New', monospace !important; /* Моноширинный шрифт */
+    font-size: 13px !important;           /* Кегль текста */
+    line-height: 1.4 !important;          /* Межстрочный интервал */
+    box-sizing: border-box !important;    /* padding входит в заданную высоту */
+}
+
+/* --- Панель кнопок "Сохранить / Отмена" внизу окна --- */
+.ini-editor-buttons {
+    padding: 8px 12px !important;         /* Отступы панели */
+    text-align: right !important;         /* Кнопки прижаты вправо */
+    border-top: 1px solid #bbb !important;/* Линия-разделитель над панелью */
+    background: #e4e4e4 !important;       /* Серый фон панели */
+    margin: 0 !important;                 /* Без внешних отступов */
+}
+
+/* Кнопки "Сохранить" и "Отмена" */
+.ini-editor-buttons button {
+    margin-left: 8px !important;          /* Зазор между кнопками */
+    padding: 5px 16px !important;         /* Отступы внутри кнопки */
+    font-family: 'Segoe UI', Arial, sans-serif !important; /* Шрифт надписей */
+    font-size: 13px !important;           /* Кегль надписей */
+    background: #ffffff !important;       /* Белый фон кнопок */
+    color: #000000 !important;            /* Чёрные надписи */
+    border: 1px solid #999 !important;    /* Серая рамка */
+    border-radius: 3px !important;        /* Скругление углов кнопок */
+    cursor: pointer !important;           /* Курсор-рука при наведении */
+}
+
+/* Наведение мыши на "Сохранить/Отмена" */
+.ini-editor-buttons button:hover {
+    background: #e8e8e8 !important;       /* Подсветка фона при наведении */
+}
+
+/* --- ТЁМНЫЙ блок-наследие до CodeMirror.
+   ВНИМАНИЕ: свойства с !important из светлого блока выше побеждают,
+   поэтому отсюда реально работают только overflow и border-radius. --- */
+.ini-editor-text {
+    flex: 1;                              /* Дубль светлого блока (равнозначно) */
+    overflow: hidden;                     /* РАБОТАЕТ: контейнер не скроллится сам — скроллит CodeMirror */
+    border: 1px solid #555;               /* НЕ работает: перебито border:none !important выше */
+    border-radius: 4px;                   /* РАБОТАЕТ: скругление углов контейнера */
+    background: #1e1e1e;                  /* НЕ работает: перебито #ffffff !important выше */
+    color: #d4d4d4;                       /* НЕ работает: перебито #000000 !important выше */
+}
+
+/* Внутренности CodeMirror: редактор на всю высоту контейнера */
+.ini-editor-text .cm-editor {
+    height: 100%;                         /* Редактор занимает 100% высоты контейнера */
+}
+
+/* Прокрутка содержимого редактора */
+.ini-editor-text .cm-scroller {
+    overflow: auto;                       /* Полосы прокрутки появляются при необходимости */
+}
+
+/* ============================================================================
+   Панель поиска CodeMirror (Ctrl+F): кнопки next / previous / all / replace.
+   Селектор [class*="cm-panels"] ловит контейнер панелей в ЛЮБОЙ версии CM
+   (точные классы .cm-panel/.cm-panel-search в вашей сборке не совпали).
+   !important нужен, потому что внутренние стили CodeMirror иначе перебивают.
+   ============================================================================ */
+/* Кнопки панели поиска: next / previous / all / replace / replace all */
+[class*="cm-panels"] button {
+    height: 30px !important;              /* Высота кнопок */
+    font-size: 15px !important;           /* Кегль надписей */
+    line-height: 1 !important;            /* Убрать лишнюю межстрочную высоту */
+    min-width: 40px !important;           /* Минимальная ширина */
+    padding: 4px 12px !important;         /* Отступы внутри кнопки */
+    box-sizing: border-box !important;    /* height включает padding и рамку */
+    background: #c9c7c7 !important;       /* Фон кнопки (shorthand: цвет + без картинки) */
+    background-color: #136ba5 !important; /* Дубль цветом — на случай, если shorthand перебит */
+    background-image: none !important;    /* Убрать градиент/картинку поверх цвета */
+    color: #ccf5c0 !important;            /* Цвет надписей на кнопках */
+    border: 1px solid #2c8324 !important;    /* Рамка кнопок */
+}
+
+/* ============================================================================
+   Панель поиска CodeMirror: надписи Find / Replace / match case / regexp / by word
+   ============================================================================ */
+
+/* Все текстовые надписи панели поиска:
+   Find, Replace, match case, regexp, by word */
+[class*="cm-panels"] label {
+    font-size: 20px !important;           /* Размер шрифта надписей */
+    color: #e0e0e0 !important;            /* Цвет надписей */
+    font-weight: 600 !important;          /* Толщина шрифта: 400 обычный, 600 полужирный, 700 жирный */
+    margin-right: 10px !important;        /* Отступ справа между надписями/группами */
+}
+
+/* Сами чекбоксы match case / regexp / by word */
+[class*="cm-panels"] input[type="checkbox"] {
+    width: 20px !important;               /* Ширина квадратика чекбокса */
+    height: 20px !important;              /* Высота квадратика чекбокса */
+    margin-right: 6px !important;         /* Отступ между квадратиком и текстом */
+    vertical-align: middle !important;    /* Выравнивание чекбокса по центру строки */
+}
+
+/* Текстовые поля Find и Replace */
+[class*="cm-panels"] input:not([type="checkbox"]) {
+    height: 30px !important;              /* Высота полей Find / Replace */
+    font-size: 15px !important;           /* Размер текста внутри полей */
+    padding: 4px 10px !important;         /* Внутренние отступы в полях */
+    box-sizing: border-box !important;    /* Чтобы height включал padding и border */
+}
+/* ============================================================================
+   Панель с номерами строк слева (gutter): фон, цвет номеров (number color), разделитель
+   ============================================================================ */
+[class*="cm-gutters"] {
+    background-color: #f0f0f0 !important;    /* Фон панели с номерами (вместо чёрного) */
+    color: #333333 !important;               /* Цвет самих номеров строк */
+    border-right: 1px solid #bbb !important; /* Вертикальная линия между номерами и текстом */
+}
+
+/* Номер активной (текущей) строки — обычно подсвечивается отдельно */
+[class*="cm-activeLineGutter"] {
+    background-color: #dce8f5 !important;    /* Фон номера активной строки */
+    color: #000000 !important;               /* Цвет номера активной строки */
+}
+/* ============================================================================
+   Курсор (каретка) в редакторе: вертикальная чёрточка в месте ввода
+   ============================================================================ */
+[class*="cm-cursor"] {
+    border-left: 4px solid #fa466d !important;  /* Цвет и толщина курсора (чёрный для светлого фона) */
+    /* visibility и opacity НЕ задаём: они перебивают CSS-анимацию мигания cm-blink */
+}
+/* ============================================================================
+   Выделение текста мышью (фон выбранных участков)
+   ============================================================================ */
+[class*="cm-selectionBackground"] {
+    background-color: #add6ff !important;   /* Цвет выделения, когда редактор БЕЗ фокуса */
+}
+
+.cm-editor.cm-focused [class*="cm-selectionBackground"] {
+    background-color: #7fb8e6 !important;   /* Цвет выделения, когда редактор В фокусе (обычно ярче) */
+}

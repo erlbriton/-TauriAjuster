@@ -1,0 +1,185 @@
+/* Окно "Создать резерв для устройства..." */
+.backup-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 11900 !important;
+    background: rgba(0, 0, 0, 0.45) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.backup-overlay.hidden {
+    display: none !important;
+}
+
+.backup-window {
+    width: 680px !important;
+    max-width: 95% !important;
+    max-height: 92% !important;
+    overflow-y: auto !important;
+    background: #f0f0f0 !important;
+    border: 1px solid #888 !important;
+    border-radius: 4px !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    color: #333333 !important;
+}
+
+.backup-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 6px 10px !important;
+    background: #d8d8d8 !important;
+    border-bottom: 1px solid #bbb !important;
+}
+
+.backup-header-title {
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #333333 !important;
+}
+
+.backup-close-btn {
+    background: none !important;
+    border: none !important;
+    color: #555 !important;
+    font-size: 14px !important;
+    cursor: pointer !important;
+    padding: 0 4px !important;
+}
+
+.backup-close-btn:hover {
+    color: #000 !important;
+}
+
+.backup-body {
+    padding: 10px 12px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+}
+
+.backup-group {
+    border: 1px solid #bbb !important;
+    padding: 8px !important;
+    margin: 0 !important;
+}
+
+.backup-group legend {
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    padding: 0 4px !important;
+    color: #333333 !important;
+}
+
+.backup-device-info {
+    font-family: 'Courier New', monospace !important;
+    font-size: 12px !important;
+    line-height: 1.5 !important;
+    background: #ffffff !important;
+    border: 1px solid #999 !important;
+    padding: 6px 8px !important;
+    white-space: pre !important;
+    overflow: auto !important;
+    max-height: 10em !important;
+    color: #000000 !important;
+}
+
+.backup-row {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin-bottom: 8px !important;
+}
+
+.backup-label {
+    width: 110px !important;
+    flex: none !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 12px !important;
+}
+
+.backup-select {
+    flex: 1 !important;
+    padding: 3px 4px !important;
+    border: 1px solid #999 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 12px !important;
+}
+
+.backup-table-wrap {
+    max-height: 16em !important;
+    overflow: auto !important;
+    border: 1px solid #999 !important;
+    background: #ffffff !important;
+}
+
+.backup-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 12px !important;
+}
+
+.backup-table th,
+.backup-table td {
+    border: 1px solid #ccc !important;
+    padding: 2px 6px !important;
+    text-align: left !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 16em !important;
+}
+
+.backup-table thead th {
+    background: #d8d8d8 !important;
+    position: sticky !important;
+    top: 0 !important;
+}
+
+.backup-table tbody tr {
+    cursor: pointer !important;
+}
+
+/* Выделенная строка — шаблон, как в старом аджастере */
+.backup-table tbody tr.is-selected {
+    background: #00c000 !important;
+    color: #000000 !important;
+}
+
+.backup-check {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 12px !important;
+    margin-bottom: 4px !important;
+}
+
+.backup-actions {
+    display: flex !important;
+    gap: 8px !important;
+}
+
+.backup-actions .backup-btn {
+    flex: 1 !important;
+    padding: 4px 12px !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 12px !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: 1px solid #999 !important;
+    border-radius: 3px !important;
+    cursor: pointer !important;
+}
+
+.backup-actions .backup-btn:hover {
+    background: #e8e8e8 !important;
+}

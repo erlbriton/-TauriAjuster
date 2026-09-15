@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Industrial Control Panel</title>
+    <link rel="stylesheet" href="src/css/style.css" />
+    <link rel="stylesheet" href="src/css/monitor.css" />
+  </head>
+  <body>
+    <div class="app-layout">
+  <div id="osc-container" class="hidden"></div>
+  <div class="osc-resizer" id="oscResizer"></div>
+
+  <div class="panel-right">
+        <div class="top-main-toolbar">
+          <div class="split-btn-group">
+            <button id="deviceListActionBtn" class="split-btn-main" title="Обновить список устройств">🔧</button>
+            <div class="split-btn-divider"></div>
+            <button id="deviceListArrowBtn" class="split-btn-arrow">▼</button>
+            <div id="deviceListDropdown" class="split-dropdown-menu">
+              <div class="split-dropdown-item" id="menuDeviceRefresh">Обновить</div>
+              <div class="split-dropdown-item" id="menuDeviceSerials">Серийные номера</div>
+              <div class="split-dropdown-item" id="menuDevicePlace">Место установки</div>
+              <div class="split-dropdown-item" id="menuDeviceMechType">Тип механизма</div>
+              <div class="split-dropdown-item" id="menuDeviceServiceDate">Дата последнего обслуживания</div>
+              <div class="split-dropdown-item" id="menuDeviceType">Тип устройства</div>
+            </div>
+          </div>
+          <button class="tool-btn" id="modbusScanBtn" title="Поиск устройств в сети Modbus">🔍</button>
+          <button class="tool-btn" id="clipboardBtn" title="Создать отчёт">📋</button>
+          <div class="split-btn-group">
+            <button id="toggleOscMainBtn" class="split-btn-main" title="Осциллограф">📈</button>
+            <div class="split-btn-divider"></div>
+            <button id="toggleOscArrowBtn" class="split-btn-arrow" title="Меню осциллографа">▾</button>
+            <div id="toggleOscDropdown" class="split-dropdown-menu">
+              <div class="split-dropdown-item" id="menuToggleOsc">Осциллограф</div>
+              <div class="split-dropdown-item" id="menuViewRec">Просмотр осциллограммы</div>
+            </div>
+          </div>
+          <button id="cmdlineBtn" class="tool-btn cmdline-btn" title="Командная строка">
+            <svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true">
+              <rect x="0.5" y="0.5" width="17" height="13" rx="2" fill="#1e1e1e" stroke="#8a8a8a" stroke-width="1"></rect>
+              <path d="M3.5 4 L6.5 7 L3.5 10" fill="none" stroke="#35e035" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+              <line x1="8.5" y1="10" x2="14" y2="10" stroke="#35e035" stroke-width="1.6" stroke-linecap="round"></line>
+            </svg>
+          </button>
+          <button class="tool-btn">📦 ▾</button>
+
+          <input type="file" id="folderPicker" webkitdirectory directory style="display: none" />
+          <input type="file" id="templatePicker" multiple style="display: none" />
+
+          <div class="split-btn-group">
+            <button id="folderActionBtn" class="split-btn-main" title="Открыть файл">📁</button>
+            <div class="split-btn-divider"></div>
+            <button id="folderArrowBtn" class="split-btn-arrow">▼</button>
+            <div id="folderDropdown" class="split-dropdown-menu">
+              <div class="split-dropdown-item" id="menuOpenFile">Открыть файл</div>
+              <div class="split-dropdown-item" id="menuOpenFolder">Открыть папку</div>
+            </div>
+          </div>
+          <select class="toolbar-device-mode-select">
+            <option value="FLASH">FLASH</option>
+            <option value="CD">CD</option>
+            <option value="RAM">RAM</option>
+          </select>
+
+          <button id="connectBtn" class="action-btn">подключиться</button>
+          <button id="idBtn" class="action-btn" title="Подключить com порт">ID</button>
+          <div class="split-btn-group" id="treeSearchSplit">
+    <button class="split-btn-main tree-search-btn" id="treeSearchMainBtn" title="Поиск места установки">?</button>
+    <div class="split-btn-divider"></div>
+    <button class="split-btn-arrow" id="treeSearchDropdownBtn" title="Действия поиска">▼</button>
+    <div class="split-dropdown-menu" id="treeSearchMenu">
+        <div class="split-dropdown-item" data-action="location">Поиск места установки</div>
+        <div class="split-dropdown-item" data-action="param">Поиск параметра</div>
+    </div>
+</div>
+          <div class="split-btn-group" id="helpSplit">
+            <button class="split-btn-main help-btn" id="helpMainBtn" title="Помощь">
+              <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+                <g transform="rotate(-6 12 12)">
+                  <rect x="6.5" y="5" width="13" height="15" rx="1"
+                        fill="#ffffff" stroke="#000000" stroke-width="1.2"/>
+                  <rect x="4" y="3" width="13" height="15" rx="1"
+                        fill="#8e008e" stroke="#000000" stroke-width="1.2"/>
+                  <rect x="4.8" y="3.8" width="2" height="13.4" fill="#c44fc4"/>
+                  <text x="11" y="14.5" text-anchor="middle" font-size="12" font-weight="bold"
+                        fill="#ffdf00" font-family="Arial, sans-serif">?</text>
+                </g>
+              </svg>
+            </button>
+            <div class="split-btn-divider"></div>
+            <button class="split-btn-arrow" id="helpDropdownBtn" title="Меню помощи">▼</button>
+            <div class="split-dropdown-menu" id="helpMenu" style="left: auto; right: 0;">
+              <div class="split-dropdown-item" data-action="help">Помощь</div>
+              <div class="split-dropdown-item" data-action="about">О программе</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-content-wrapper">
+          <div class="left-sidebar-column">
+            <div class="sidebar-tree-container"></div>
+          </div>
+          <div class="sidebar-resizer"></div>
+          <div class="right-main-content">
+            <div class="settings-panel">
+              <div class="settings-section-title">Настройки связи</div>
+              <div class="settings-row">
+                <span class="label">BUS</span>
+                <select class="select-blue" id="busSelect">
+                    <option value="RTU" selected>MODBUS RTU</option>
+                    <option value="TCP">MODBUS TCP/IP</option>
+                </select>
+                <span id="rtuControls">
+                  <span class="label">COM</span>
+                  <select id="comSelect" class="select-gray"><option>—</option></select>
+                  <span class="label">BPS</span>
+                  <select id="baudSelect" class="select-blue">
+                      <option value="9600">9600</option>
+                      <option value="19200">19200</option>
+                      <option value="57600">57600</option>
+                      <option value="115200" selected>115200</option>
+                      <option value="230400">230400</option>
+                      <option value="460800">460800</option>
+                      <option value="921600">921600</option>
+                  </select>
+                  <span class="label">FE</span>
+                  <input type="text" class="input-text frame-input" value="20" />
+                </span>
+                <span id="tcpControls" style="display: none;">
+                  <span class="label">IP</span>
+                  <input type="text" id="tcpIpInput" class="input-text" value="192.168.1.78" style="width: 110px;" />
+                  <span class="label">Port</span>
+                  <input type="text" id="tcpPortInput" class="input-text" value="501" style="width: 50px;" />
+                </span>
+                <button id="addrBtn" class="inline-btn addr-btn">Адрес: x01</button>
+              </div>
+                    <div class="id-banner">ID: <span>—</span></div>
+                    <div class="settings-row">
+                      <span class="label">Тип механизма</span>
+                      <input type="text" class="input-text mechanism-input" value="Не указан" />
+                <span class="label">Дата</span>
+                <input type="text" class="input-text date-input" value="29.01.1964" />
+                <button class="inline-btn" id="todayBtn">Сегодня</button>
+              </div>
+              <div class="settings-divider"></div>
+              <div class="settings-row last-row">
+                <span class="label">Место установки</span>
+                <input type="text" class="input-text location-input" value="" />
+                <button id="save-btn" class="inline-btn">Сохранить изменения</button>
+                <button id="refresh-btn" class="refresh-btn">🔄 Обновить</button>
+              </div>
+            </div>
+            <div class="table-wrapper">
+              <table class="modbus-grid">
+                <colgroup>
+                  <col style="width: 6%" /><col style="width: 12%" /><col style="width: 28%" /><col style="width: 8%" />
+                  <col style="width: 10%" /><col style="width: 13%" /><col style="width: 10%" /><col style="width: 13%" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th colspan="4" class="main-group">ПАРАМЕТРЫ</th>
+                    <th colspan="2" class="main-group">БАЗА</th>
+                    <th colspan="2" class="main-group">КОНТРОЛЛЕР</th>
+                  </tr>
+                  <tr>
+                    <th>№</th><th>Имя</th><th>Описание</th><th>Ед.изм</th><th>hex</th><th>Physical</th><th>hex</th><th>Physical</th>
+                  </tr>
+                </thead>
+                <tbody id="grid-data-rows"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+            <!-- Окно "Новое устройство" (если родной INI не найден) -->
+      <div id="newDeviceOverlay" class="new-device-overlay hidden">
+        <div class="new-device-window">
+          <div class="new-device-header">
+            <span class="new-device-header-title">Новое устройство</span>
+            <button id="newDeviceCloseBtn" class="new-device-close-btn" type="button" title="Закрыть">✕</button>
+          </div>
+          <div class="new-device-body">
+            <div class="new-device-row">
+              <span class="new-device-label">ID</span>
+              <input id="newDeviceIdInput" class="new-device-input" type="text" readonly />
+            </div>
+            <div class="new-device-row">
+              <span class="new-device-label">Тип</span>
+              <input id="newDeviceTypeInput" class="new-device-input" type="text" readonly />
+            </div>
+            <div class="new-device-info">
+              <div>Версия устройства: <span id="newDeviceVerDevice">—</span></div>
+              <div>Версия прошивки: <span id="newDeviceVerFw">—</span></div>
+              <div>Дата прошивки: <span id="newDeviceFwDate">—</span></div>
+            </div>
+            <div class="new-device-row">
+              <span class="new-device-label">* Механизм</span>
+              <input id="newDeviceMechInput" class="new-device-input" type="text" />
+            </div>
+            <div class="new-device-row">
+              <span class="new-device-label">* Расположение</span>
+              <input id="newDeviceLocInput" class="new-device-input" type="text" />
+            </div>
+            <div class="new-device-row">
+              <span class="new-device-label">Шаблон</span>
+              <select id="newDeviceTemplateSelect" class="new-device-select"></select>
+              <button id="newDeviceAddTemplateBtn" class="new-device-btn" type="button">Добавить шаблон</button>
+            </div>
+            <div class="new-device-note">* Эти поля можно заполнить позже</div>
+            <button id="newDeviceBackupBtn" class="new-device-btn new-device-wide-btn" type="button">📄 Создать резерв для блока</button>
+            <button id="newDeviceChangeFolderBtn" class="new-device-btn new-device-wide-btn" type="button">Сменить папку базы…</button>
+            <div class="new-device-actions">
+              <button id="newDeviceAddBtn" class="new-device-btn" type="button">Добавить устройство в базу</button>
+              <button id="newDeviceCancelBtn" class="new-device-btn" type="button">Отмена</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Окно "Создать резерв для устройства..." -->
+      <div id="backupOverlay" class="backup-overlay hidden">
+        <div class="backup-window">
+          <div class="backup-header">
+            <span class="backup-header-title">Создать резерв для устройства…</span>
+            <button id="backupCloseBtn" class="backup-close-btn" type="button" title="Закрыть">✕</button>
+          </div>
+          <div class="backup-body">
+            <fieldset class="backup-group">
+              <legend>Устройство</legend>
+              <div id="backupDeviceInfo" class="backup-device-info"></div>
+            </fieldset>
+            <fieldset class="backup-group">
+              <legend>Настроить как…</legend>
+              <div class="backup-row">
+                <span class="backup-label">Устройство типа</span>
+                <select id="backupTypeSelect" class="backup-select"></select>
+              </div>
+              <div class="backup-table-wrap">
+                <table class="backup-table">
+                  <thead>
+                    <tr>
+                      <th>Место установки</th>
+                      <th>Механизм</th>
+                      <th>Серийный номер</th>
+                      <th>Файл</th>
+                    </tr>
+                  </thead>
+                  <tbody id="backupTableBody"></tbody>
+                </table>
+              </div>
+            </fieldset>
+            <fieldset class="backup-group">
+              <legend>Использовать данные</legend>
+              <label class="backup-check"><input type="checkbox" id="backupUseLocation" /> Место установки</label>
+              <label class="backup-check"><input type="checkbox" id="backupUseMech" /> Название механизма</label>
+            </fieldset>
+            <div class="backup-actions">
+              <button id="backupApplyBtn" class="backup-btn" type="button">Применить</button>
+              <button id="backupCancelBtn" class="backup-btn" type="button">Отмена</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Окно поиска имени в списке устройств -->
+      <div id="treeSearchOverlay" class="tree-search-overlay hidden">
+        <div class="tree-search-window">
+          <div class="tree-search-header">
+            <span class="tree-search-title">Поиск имени</span>
+            <button id="treeSearchCloseBtn" class="tree-search-close-btn" type="button">✕</button>
+          </div>
+          <div class="tree-search-body">
+            <input type="text" id="treeSearchInput" class="tree-search-input" placeholder="Введите название места..." />
+            <div id="treeSearchStatus" class="tree-search-status"></div>
+          </div>
+          <div class="tree-search-actions">
+            <button id="treeSearchFindBtn" class="tree-search-btn-primary" type="button">Найти</button>
+            <button id="treeSearchCancelBtn" class="tree-search-btn-secondary" type="button">Отмена</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Окно "Свойства параметра" (открывается по двойному клику на строке таблицы) -->
+      <div id="paramPropsOverlay" class="param-props-overlay hidden">
+        <div class="param-props-window">
+          <div class="param-props-header">
+            <span class="param-props-title">Свойства параметра</span>
+            <button id="paramPropsCloseBtn" class="param-props-close-btn" type="button" title="Закрыть">✕</button>
+          </div>
+          <div class="param-props-body">
+            <fieldset class="param-props-section">
+              <legend>Основные</legend>
+              <div class="param-props-row">
+                <label class="param-props-label">Обозначение</label>
+                <input type="text" id="paramPropsName" class="param-props-input param-props-readonly" readonly />
+              </div>
+              <div class="param-props-row">
+                <label class="param-props-label">Описание</label>
+                <input type="text" id="paramPropsDescription" class="param-props-input param-props-readonly" readonly />
+              </div>
+              <div class="param-props-row">
+                <label class="param-props-label">Ед.изм.</label>
+                <input type="text" id="paramPropsUnit" class="param-props-input param-props-readonly" readonly />
+              </div>
+              <div class="param-props-row">
+                <label class="param-props-label">Шкала</label>
+                <select id="paramPropsScaleSelect" class="param-props-select">
+                  <option value="IntegerScale">IntegerScale</option>
+                  <option value="FracDecScale">FracDecScale</option>
+                  <option value="FracHundScale">FracHundScale</option>
+                  <option value="FracThousScale">FracThousScale</option>
+                  <option value="FracDecThousScale">FracDecThousScale</option>
+                </select>
+                <input type="text" id="paramPropsScaleValue" class="param-props-input param-props-scale-value param-props-readonly" readonly />
+              </div>
+              <div class="param-props-row">
+                <label class="param-props-label">Зависит от</label>
+                <select id="paramPropsDependsSelect" class="param-props-select">
+                  <option value="">—</option>
+                </select>
+                <input type="text" id="paramPropsDependsSide" class="param-props-input param-props-readonly" readonly />
+              </div>
+              <div class="param-props-row">
+                <label class="param-props-label">Коэффициент</label>
+                <input type="text" id="paramPropsCoefficient" class="param-props-input" />
+              </div>
+              <div class="param-props-row">
+                <label class="param-props-label">Вид параметра</label>
+                <input type="text" id="paramPropsTypeView" class="param-props-input param-props-type-value param-props-readonly" readonly size="8" />
+              </div>
+            </fieldset>
+          </div>
+          <div class="param-props-actions">
+            <button id="paramPropsApplyBtn" class="param-props-btn" type="button">Применить</button>
+            <button id="paramPropsCancelBtn" class="param-props-btn" type="button">Отмена</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Окно командной строки -->
+      <div id="cmdlineOverlay" class="cmdline-overlay hidden">
+        <div class="cmdline-window">
+          <div class="cmdline-header">
+            <span class="cmdline-header-title">Командная строка</span>
+            <button id="cmdlineCloseBtn" class="cmdline-close-btn" type="button" title="Закрыть">✕</button>
+          </div>
+          <div class="cmdline-controls">
+            <span class="cmdline-label">BUS</span>
+            <select id="cmdlineBusSelect" class="cmdline-select">
+              <option value="RTU">MODBUS RTU</option>
+              <option value="TSP">MODBUS TCP</option>
+            </select>
+            <span class="cmdline-label">BPS</span>
+            <select id="cmdlineBpsSelect" class="cmdline-select">
+              <option value="1200">1200</option>
+              <option value="2400">2400</option>
+              <option value="4800">4800</option>
+              <option value="9600">9600</option>
+              <option value="19200">19200</option>
+              <option value="38400">38400</option>
+              <option value="57600">57600</option>
+              <option value="115200" selected>115200</option>
+              <option value="230400">230400</option>
+              <option value="460800">460800</option>
+              <option value="921600">921600</option>
+            </select>
+            <span class="cmdline-label">FE</span>
+            <input id="cmdlineFeInput" class="cmdline-fe-input" type="text" value="20" />
+            <span class="cmdline-label">MODE</span>
+            <select id="cmdlineModeSelect" class="cmdline-select">
+              <option value="HEX">HEX</option>
+              <option value="ASCII">ASCII</option>
+              <option value="ASCII_FILTER">ASCII Filter</option>
+            </select>
+            <button id="cmdlineClearBtn" class="cmdline-clear-btn" type="button">Clear</button>
+          </div>
+          <div id="cmdlineOutput" class="cmdline-output"></div>
+          <div class="cmdline-input-row">
+            <input id="cmdlineInput" class="cmdline-input" type="text" spellcheck="false"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Окно создания отчёта -->
+      <div id="reportCreateOverlay" class="report-create-overlay hidden">
+        <div class="report-create-window">
+          <div class="report-create-header">Создать отчёт</div>
+          <div class="report-create-body">
+            <label class="report-field">
+              <span class="report-field-label">ОРГАНИЗАЦИЯ</span>
+              <input id="reportOrgInput" type="text" value="ООО Интеллектуальные машины" />
+            </label>
+            <div class="report-field">
+              <span class="report-field-label">НОМЕР ОТЧЁТА</span>
+              <input id="reportNumInput" type="number" min="1" value="1" />
+              <label class="report-checkbox">
+                <input id="reportAutoIncCheck" type="checkbox" /> автоинкремент
+              </label>
+            </div>
+            <button id="reportCreateBtn" type="button">Создать отчёт</button>
+            <div id="reportStatus" class="report-status"></div>
+            <div class="report-progress">
+              <div id="reportProgressBar" class="report-progress-bar"></div>
+            </div>
+          </div>
+          <div class="report-create-footer">
+            <button id="reportCreateCloseBtn" type="button">Закрыть</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Окно предпросмотра отчёта -->
+      <div id="reportPreviewOverlay" class="report-preview-overlay hidden">
+        <div class="report-preview-window">
+          <div class="report-preview-header">Предпросмотр отчёта</div>
+          <div id="reportPreviewBody" class="report-preview-body"></div>
+          <div class="report-preview-footer">
+            <button id="reportSaveBtn" type="button">Сохранить…</button>
+            <button id="reportPreviewCloseBtn" type="button">Закрыть</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Модальное окно поиска устройств в сети Modbus -->
+      <div id="modbusScanOverlay" class="scan-overlay hidden">
+        <div class="scan-window">
+          <div class="scan-header">Поиск устройств в сети Modbus</div>
+          <div class="scan-controls">
+            <label class="scan-label">Таймаут, мс:
+              <input id="scanTimeoutInput" type="number" min="50" max="5000" step="50" value="300" />
+            </label>
+            <button id="scanStartBtn" type="button">Начать поиск</button>
+            <button id="scanStopBtn" type="button" disabled>Стоп</button>
+          </div>
+          <div id="scanProgress" class="scan-progress">Готов к поиску. Диапазон адресов: 1–247.</div>
+          <div id="scanResults" class="scan-results"></div>
+          <div class="scan-footer">
+            <button id="scanCloseBtn" type="button">Закрыть</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Встроенный редактор INI-файла -->
+      <div id="iniEditorOverlay" class="ini-editor-overlay hidden">
+        <div class="ini-editor-window">
+          <div class="ini-editor-header" id="iniEditorTitle">Редактирование файла</div>
+          <div id="iniEditorContainer" class="ini-editor-text"></div>
+          <div class="ini-editor-buttons">
+            <button id="iniEditorSave" type="button">Сохранить</button>
+            <button id="iniEditorCancel" type="button">Отмена</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Контекстное меню дерева устройств -->
+      <div id="treeContextMenu" class="context-menu hidden">
+        <div class="context-menu-item" id="ctxDelete">Удалить</div>
+        <div class="context-menu-item" id="ctxOpenFile">Открыть файл для редактирования</div>
+        <div class="context-menu-item" id="ctxOpenFolder">Открыть папку с файлом</div>
+      </div>
+
+      <!-- Контекстное меню группы устройств (один пункт) -->
+      <div id="treeGroupContextMenu" class="context-menu hidden">
+        <div class="context-menu-item" id="ctxGroupDelete">Удалить</div>
+      </div>
+    </div>
+    <!-- Модальное окно "Обновление программы устройства" -->
+<div id="fwUpdateOverlay" class="hidden">
+  <div class="fw-update-modal">
+    <div class="fw-update-header">
+      <span>Обновление программы устройства</span>
+      <button id="fwUpdateCloseBtn" class="fw-update-close" title="Закрыть">×</button>
+    </div>
+
+    <div class="fw-update-body">
+      <div class="fw-row"><label>ID</label><input id="fwUpdateId" type="text" readonly class="fw-id-input"></div>
+      <div class="fw-row"><label>Тип</label><input id="fwUpdateType" type="text" readonly></div>
+      <div class="fw-row fw-plain"><label>Версия устройства:</label><span id="fwUpdateDevVersion"></span></div>
+      <div class="fw-row fw-plain"><label>Версия прошивки:</label><span id="fwUpdateFwVersion"></span></div>
+      <div class="fw-row fw-plain"><label>Дата прошивки:</label><span id="fwUpdateFwDate"></span></div>
+
+      <div class="fw-update-warning">
+        <p>Изменилась версия программного обеспечения (ПО) устройства.<br>
+        Назначение и количество параметров в текущей и предыдущей версии могут существенно различаться.</p>
+        <p>Запись в устройство параметров относящихся к предыдущей версии может привести к некорректной работе устройства.
+        Поэтому в базу будут записаны данные из шаблона или выбранного вами источника (резерва).</p>
+        <p>Перед записью будет создана резервная копия существующего файла, которая будет помещена в директорию BackUp. В списке устройств, резервные копии выделены красным цветом. Не забывайте их удалять в конце работы по переносу параметров.</p>
+      </div>
+
+      <div class="fw-row"><label>* Механизм</label><input id="fwUpdateMech" type="text"></div>
+      <div class="fw-row"><label>* Расположение</label><input id="fwUpdateLocation" type="text"></div>
+      <div class="fw-row"><label>Шаблон</label><select id="fwUpdateTemplateSelect"></select><button id="fwUpdateAddTemplateBtn" type="button">Добавить шаблон</button></div>
+      <div class="fw-note">* Эти поля можно заполнить позже</div>
+    </div>
+
+    <div class="fw-update-footer">
+      <button id="fwUpdateCreateCopyBtn" type="button">📄 Создать резервную копию устройства</button>
+      <div class="fw-footer-row">
+        <button id="fwUpdateAddDeviceBtn" type="button">Добавить устройство в базу</button>
+        <button id="fwUpdateCancelBtn" type="button">Отмена</button>
+      </div>
+    </div>
+  </div>
+</div>
+    <script type="module" src="src/main.ts"></script>
+  </body>
+</html>

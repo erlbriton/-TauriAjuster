@@ -1,0 +1,301 @@
+/* ==========================================================================
+   КОМПОНЕНТ ИНТЕРАКТИВНОЙ ТАБЛИЦЫ РЕГИСТРОВ (table.css)
+   ========================================================================== */
+
+.table-wrapper {
+    flex: 1;
+    overflow: auto; /* Включаем оба скролла сразу */
+    background-color: #ffffff;
+    border: 1px solid #7b7b7b;
+    /* Убираем отступ сверху, оставляем остальные */
+    margin: 2px 10px 10px 10px; 
+    position: relative;
+}
+
+.table-wrapper .modbus-grid {
+    table-layout: fixed; /* ВЕРНУЛИ FIXED: это критично для работы JS-ресайзера */
+    width: 100%;         
+    border-collapse: separate; 
+    border-spacing: 0;         
+    font-size: 14px;
+    font-family: Arial, sans-serif;
+    background-color: #ffffff;
+    color: #000000;
+}
+
+.table-wrapper .modbus-grid th, 
+.table-wrapper .modbus-grid td {
+    border-bottom: none; 
+    border-right: 1px solid #1d1b1a; 
+    border-left: none;
+    padding: 6px;
+    text-align: center;
+    white-space: nowrap;
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    font-weight: normal;
+    color: #000000;
+}
+
+.table-wrapper .modbus-grid th {
+    font-weight: bold;
+}
+
+.table-wrapper .modbus-grid td .prm-val-display,
+.table-wrapper .modbus-grid td .param-name,
+.table-wrapper .modbus-grid td .param-desc,
+.table-wrapper .modbus-grid td .hex-val,
+.table-wrapper .modbus-grid td input,
+.table-wrapper .modbus-grid td select {
+    color: #000000;
+    font-size: 14px;
+    font-family: Arial, sans-serif;
+}
+
+.table-wrapper .modbus-grid th:first-child,
+.table-wrapper .modbus-grid td:first-child {
+    border-left: 1px solid #a0a0a0;
+}
+
+.table-wrapper .modbus-grid td {
+    height: 24px;
+}
+
+.table-wrapper .modbus-grid .main-group { 
+    background-color: #a6a6a6; 
+}
+
+/* =================================================================
+   ФИКСАЦИЯ ШАПКИ
+   ================================================================= */
+
+.table-wrapper .modbus-grid thead th {
+    position: sticky;
+    background-color: #a8a7a7; 
+    z-index: 10; /* Увеличили Z-index */
+    color: #000000;
+}
+
+.table-wrapper .modbus-grid thead tr:nth-child(1) th {
+    top: 0;
+    z-index: 11;
+    background-color: #dbdada;
+}
+
+/* Стрелка ">" у правого края заголовка БАЗА — остриё к границе с КОНТРОЛЛЕР */
+.table-wrapper .modbus-grid th.base-header::after {
+    content: '>';
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 30px;
+    font-weight: 900;
+    -webkit-text-stroke: 1.5px currentColor;
+    color: #00b050;
+    line-height: 1;
+    pointer-events: none;
+}
+
+/* Стрелка "<" у левого края заголовка КОНТРОЛЛЕР — остриё к границе с БАЗА */
+.table-wrapper .modbus-grid th.controller-header::before {
+    content: '<';
+    position: absolute;
+    left: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 30px;
+    font-weight: 900;
+    -webkit-text-stroke: 1.5px currentColor;
+    color: #00b050;
+    line-height: 1;
+    pointer-events: none;
+}
+
+/* ИЗМЕНЕНО: top уменьшен до 26px, чтобы убрать зазор между рядами шапки */
+.table-wrapper .modbus-grid thead tr:nth-child(2) th {
+    top: 26px;
+    z-index: 10;
+}
+
+/* РАМКА ДЛЯ ВСЕЙ СТРОКИ "ПАРАМЕТРЫ" (второй ряд шапки) */
+.table-wrapper .modbus-grid thead tr:nth-child(2) th {
+    border-top: 1px solid #000000;
+    border-bottom: 1px solid #000000;
+}
+
+.table-wrapper .modbus-grid thead tr:nth-child(2) th:first-child {
+    border-left: 1px solid #000000;
+}
+
+.table-wrapper .modbus-grid thead tr:nth-child(2) th:last-child {
+    border-right: 1px solid #000000;
+}
+
+/* =================================================================
+   РЕСАЙЗЕРЫ (Сделали их активными поверх всего)
+   ================================================================= */
+
+.table-wrapper .table-resizer {
+    position: absolute;
+    top: 0;
+    right: -4px; 
+    width: 8px; 
+    height: 100%; /* Ресайзер теперь на всю высоту шапки */
+    cursor: col-resize;
+    user-select: none;
+    background-color: transparent;
+    z-index: 100; /* Поверх sticky-шапки */
+    pointer-events: auto;
+}
+
+.table-wrapper .modbus-grid thead tr:nth-child(2) .table-resizer {
+    height: 24px; /* Корректируем высоту ресайзера, чтобы не перекрывал рамку */
+}
+
+.table-wrapper .table-resizer:hover, 
+.table-wrapper .table-resizer.active {
+    background-color: #0055ff;
+}
+
+/* Выделение строки */
+.table-wrapper .modbus-grid tbody tr.selected,
+.table-wrapper .modbus-grid tbody tr.selected td {
+    background-color: rgba(0, 255, 0, 0.2);
+}
+
+/* Выделение строки в таблице Modbus (клик или поиск параметра) */
+
+/* Красная звёздочка несохранённого изменения в колонке № */
+.dirty-star {
+    color: #d40000;
+    font-weight: bold;
+}
+.table-wrapper .modbus-grid tbody tr.selected {
+    background-color: #00d2ff !important;
+}
+
+.table-wrapper .modbus-grid tbody tr.selected td {
+    color: #0f0f11 !important;
+}
+
+/* Глобальное состояние загрузки */
+.loading-state {
+    cursor: wait;
+    pointer-events: none; /* Блокирует клики на всем, пока идет загрузка */
+}
+
+/* Визуальный индикатор (вращающееся колечко) */
+.loading-state::after {
+    content: "";
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 40px;
+    height: 40px;
+    margin-left: -20px;
+    margin-top: -20px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    z-index: 9999;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* === НОВАЯ ПОДСВЕТКА РАСХОЖДЕНИЯ  === */
+/* Подсветка расхождения База/Контроллер — ТОЛЬКО ячейки значений */
+
+/* 1. Красим ячейки с hex-значениями (класс .hex-val) */
+tr.row-mismatch td.hex-val {
+    color: #ff4d4d !important;
+}
+
+/* 2. Красим текст внутри физических значений (класс .prm-val-display) */
+tr.row-mismatch td .prm-val-display {
+    color: #ff4d4d !important;
+}
+
+/* 3. Красим select-ы, если они есть (для TPrmList) */
+tr.row-mismatch td select.table-prm-select {
+    color: #ff4d4d !important;
+    border-color: #ff4d4d !important;
+}
+
+/* 4. Если физическое значение просто в div без класса, но внутри td после 4-го */
+/* Используем более точный селектор: td, который НЕ является параметром/именем/описанием/единицей */
+tr.row-mismatch td:not(.param-id):not(.param-name):not(.param-desc):not([class*="unit"]):not(:nth-child(-n+4)) {
+    color: #ff4d4d !important;
+}
+
+/* =================================================================
+   ПОДСВЕТКА АКТИВНОЙ ЯЧЕЙКИ (ЖЕЛТЫЙ ФОН ПОВЕРХ ЗЕЛЕНОГО)
+   ================================================================= */
+
+/* Желтая подсветка активной ячейки данных (поверх зеленого фона строки) */
+td.cell-active {
+    background-color: rgba(255, 251, 0, 0.849) !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 215, 0, 0.5);
+    color: inherit;
+}
+
+/* Зелёная вспышка (~1 сек) на ячейке после успешной записи */
+td.write-success {
+    background-color: rgba(0, 200, 80, 0.65) !important;
+    box-shadow: inset 0 0 0 1px rgba(0, 160, 60, 0.6);
+    transition: background-color 0.2s ease;
+}
+
+/* Красная вспышка (~1.5 сек) на ячейке, если запись не удалась */
+td.write-error {
+    background-color: rgba(255, 60, 60, 0.65) !important;
+    box-shadow: inset 0 0 0 1px rgba(200, 0, 0, 0.6);
+    transition: background-color 0.2s ease;
+}
+
+/* Гарантируем, что текст внутри div/span/select тоже наследует цвет */
+td.cell-active .prm-val-display,
+td.cell-active select,
+td.cell-active div {
+    color: inherit !important;
+}
+/* Кнопка адреса Modbus */
+.addr-btn {
+    min-width: 90px; /* Чтобы влезало "Адрес: xFF" */
+    text-align: center;
+    font-family: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    /* Наследуем стили от .inline-btn, если нужно переопределить цвета - сделайте это здесь */
+}
+/* ==========================================================================
+   DRAG-AND-DROP подсветка таблицы при перетаскивании файлов
+   ========================================================================== */
+
+.drop-zone-active {
+  background-color: rgba(56, 189, 248, 0.15) !important;
+}
+
+.drop-zone-active::before {
+  content: "📁 Отпустите для загрузки INI-файлов";
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: #38bdf8;
+  padding: 20px 40px;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: 600;
+  z-index: 9999;
+  pointer-events: none;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}

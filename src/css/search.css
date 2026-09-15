@@ -1,0 +1,112 @@
+/* Окно поиска имени в списке устройств */
+.tree-search-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 11900 !important;
+    background: rgba(0, 0, 0, 0.45) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.tree-search-overlay.hidden {
+    display: none !important;
+}
+
+.tree-search-window {
+    width: 400px !important;
+    max-width: 90% !important;
+    background: #f0f0f0 !important;
+    border: 1px solid #888 !important;
+    border-radius: 4px !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.tree-search-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 6px 10px !important;
+    background: #d8d8d8 !important;
+    border-bottom: 1px solid #bbb !important;
+}
+
+.tree-search-title {
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #333 !important;
+}
+
+.tree-search-close-btn {
+    background: none !important;
+    border: none !important;
+    color: #555 !important;
+    font-size: 14px !important;
+    cursor: pointer !important;
+    padding: 0 4px !important;
+}
+
+.tree-search-body {
+    padding: 12px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+}
+
+.tree-search-input {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    padding: 6px 8px !important;
+    border: 1px solid #999 !important;
+    border-radius: 3px !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 13px !important;
+    color: #000 !important;
+    background: #fff !important;
+}
+
+.tree-search-status {
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 12px !important;
+    color: #c00 !important;
+    min-height: 1.2em !important;
+}
+
+.tree-search-actions {
+    display: flex !important;
+    gap: 8px !important;
+    padding: 8px 12px !important;
+    border-top: 1px solid #ccc !important;
+}
+
+.tree-search-btn-primary,
+.tree-search-btn-secondary {
+    flex: 1 !important;
+    padding: 5px 12px !important;
+    border: 1px solid #888 !important;
+    border-radius: 3px !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 12px !important;
+    cursor: pointer !important;
+}
+
+.tree-search-btn-primary {
+    background: #e0e0e0 !important;
+    color: #000 !important;
+}
+
+.tree-search-btn-secondary {
+    background: #fff !important;
+    color: #333 !important;
+}
+
+.tree-search-btn-primary:hover {
+    background: #d0d0d0 !important;
+}
+
+.tree-search-btn-secondary:hover {
+    background: #f0f0f0 !important;
+}

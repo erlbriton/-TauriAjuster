@@ -1,0 +1,231 @@
+/* ==========================================================================
+   ВЕРХНИЙ ТУЛБАР И СТИЛИЗАЦИЯ КНОПОК ПО СТАНДАРТУ RETRO (toolbar.css)
+   ========================================================================== */
+
+.top-main-toolbar {
+    width: 100%;
+    background-color: #aeaeae;
+    padding: 5px 10px;
+    border-bottom: 2px solid #7b7b7b;
+    display: flex;
+    align-items: stretch; /* Автоматическое выравнивание по высоте элементов */
+    gap: 5px;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    color: #000000;
+    font-size: 14px;
+    font-family: Arial, sans-serif;
+}
+
+.top-main-toolbar * {
+    color: #000000;
+    font-size: 14px;
+    font-family: Arial, sans-serif;
+}
+
+/* Универсальный стиль управляющих кнопок с двойным обрамлением */
+.tool-btn, 
+.action-btn, 
+.inline-btn, 
+.refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    height: auto;
+    margin: 0;
+    background-color: #c6c6c6;
+    color: #000000;
+    cursor: pointer;
+    font-weight: bold;
+    padding: 4px 12px;
+    font-size: 14px;
+    
+    /* Двойное псевдо-обрамление */
+    border: 1px solid #ffffff;      /* Наружный блик */
+    outline: 1px solid #707070;     /* Внутренняя граница */
+    box-shadow: inset 1px 1px 0px #ffffff, inset -1px -1px 0px #707070;
+}
+
+.tool-btn:hover, 
+.action-btn:hover, 
+.inline-btn:hover, 
+.refresh-btn:hover {
+    background-color: #e1e1e1;
+    outline: 1px solid #0055ff;     /* Яркий синий фокус при наведении */
+}
+
+.tool-btn:active, 
+.action-btn:active, 
+.inline-btn:active, 
+.refresh-btn:active {
+    background-color: #a0a0a0;
+    box-shadow: inset 2px 2px 2px #555555;
+    outline: 1px solid #000000;
+}
+
+.refresh-btn { 
+    margin-left: auto; /* Сдвигает кнопку обновления в крайний правый угол тулбара */
+}
+
+.tool-btn { 
+    font-size: 14px; 
+    padding: 3px 10px; 
+}
+
+/* Классическая сплит-кнопка (кнопка с раскрывающимся списком) */
+.split-btn-group {
+    display: inline-flex;
+    align-items: stretch;
+    position: relative;
+    background-color: #c6c6c6;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    border: 1px solid #ffffff;      
+    outline: 1px solid #707070;     
+    box-shadow: inset 1px 1px 0px #ffffff, inset -1px -1px 0px #707070;
+}
+
+.split-btn-group button {
+    background: transparent;
+    border: none;
+    outline: none;
+    box-shadow: none;
+    color: #000000;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 3px 8px;
+}
+
+.split-btn-main {
+    font-size: 14px; 
+}
+
+.split-btn-arrow {
+    font-size: 9px;  
+    padding: 3px 5px !important;
+}
+
+.split-btn-group button:hover {
+    background-color: #e1e1e1;
+}
+
+.split-btn-group button:active {
+    background-color: #a0a0a0;
+}
+
+/* Внутренний механический разделитель сплит-кнопки */
+.split-btn-divider {
+    width: 1px;
+    background-color: #707070;
+    border-right: 1px solid #ffffff;
+    margin: 3px 0;
+    flex-shrink: 0;
+}
+
+/* Контейнер выпадающего меню файлов */
+.split-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: -1px;
+    background-color: #c6c6c6;
+    min-width: 130px;
+    z-index: 9999;
+    margin-top: 3px;
+    box-sizing: border-box;
+    border: 1px solid #ffffff;
+    outline: 1px solid #707070;
+    box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.split-dropdown-menu.show {
+    display: block;
+}
+
+.split-dropdown-item {
+    padding: 5px 12px;
+    font-size: 14px;
+    color: #000000;
+    cursor: pointer;
+    text-align: left;
+    user-select: none;
+    white-space: nowrap;
+    background-color: #e9f584;
+}
+
+.split-dropdown-item:hover {
+    background-color: #0055ff;
+    color: #ffffff;
+}
+
+
+.sidebar-tree-container {
+    height: 100%;            /* Ограничиваем высоту */
+    overflow-y: auto;        /* Включает скроллбар при необходимости */
+    background-color: #c6c6c6; 
+    color: #000000;          /* ДОБАВЛЕНО: Явный черный цвет текста */
+    box-sizing: border-box;
+}
+
+/* Стилизация скроллбара под Windows 95/98 */
+.sidebar-tree-container::-webkit-scrollbar {
+    width: 16px;
+    background-color: #c6c6c6;
+}
+
+.sidebar-tree-container::-webkit-scrollbar-thumb {
+    background-color: #c6c6c6;
+    border: 1px solid #707070;
+    box-shadow: inset 1px 1px #ffffff, inset -1px -1px #808080;
+}
+
+.sidebar-tree-container::-webkit-scrollbar-button {
+    background-color: #c6c6c6;
+    border: 1px solid #707070;
+    height: 16px;
+    box-shadow: inset 1px 1px #ffffff, inset -1px -1px #808080;
+}
+
+.sidebar-tree-container > div, 
+.sidebar-tree-container details {
+    margin-bottom: 6px; /* Добавляет отступ между соседними элементами */
+}
+
+/* Отключаем перенос строк для элементов дерева, чтобы строки не наезжали друг на друга */
+.sidebar-tree-container div,
+.sidebar-tree-container span,
+.sidebar-tree-container summary {
+    white-space: nowrap;      /* Запрещает перенос */
+    overflow: hidden;         /* Обрезает текст без многоточия */
+}
+
+/* Кнопка поиска имени в списке устройств: жирный красный "?" у правого края */
+.tree-search-btn {
+    margin-left: auto !important;   /* прижимает кнопку к самому правому краю панели */
+    color: #d00000 !important;
+    font-weight: 900 !important;    /* максимально жирный */
+    font-size: 24px !important;     /* максимально высокий знак */
+    line-height: 1 !important;
+    min-width: 56px !important;     /* вдвое шире обычной кнопки, знак по центру */
+}
+
+/* Внутри сплит-кнопки знак вопроса не должен сдвигаться вправо */
+.split-btn-group .tree-search-btn {
+    margin-left: 0 !important;
+}
+/* Кнопка поиска в дереве — прижата к правому краю тулбара */
+#treeSearchSplit {
+    margin-left: auto;
+}
+
+/* Меню кнопки поиска открывается влево, чтобы не выходить за правый край экрана */
+#treeSearchSplit .split-dropdown-menu {
+    left: auto;
+    right: -1px;
+}

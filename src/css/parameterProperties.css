@@ -1,0 +1,171 @@
+/* Окно "Свойства параметра" */
+.param-props-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 11900 !important;
+    background: rgba(0, 0, 0, 0.45) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.param-props-overlay.hidden {
+    display: none !important;
+}
+
+.param-props-window {
+    width: 520px !important;
+    max-width: 92% !important;
+    max-height: 92% !important;
+    overflow-y: auto !important;
+    background: #f0f0f0 !important;
+    border: 1px solid #888 !important;
+    border-radius: 4px !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    color: #333 !important;
+}
+
+.param-props-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 6px 10px !important;
+    background: #d8d8d8 !important;
+    border-bottom: 1px solid #bbb !important;
+}
+
+.param-props-title {
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #333 !important;
+}
+
+.param-props-close-btn {
+    background: none !important;
+    border: none !important;
+    color: #555 !important;
+    font-size: 14px !important;
+    cursor: pointer !important;
+    padding: 0 4px !important;
+}
+
+.param-props-close-btn:hover {
+    color: #000 !important;
+}
+
+.param-props-body {
+    padding: 10px 12px !important;
+}
+
+.param-props-section {
+    border: 1px solid #bbb !important;
+    padding: 10px !important;
+    margin: 0 !important;
+}
+
+.param-props-section legend {
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    padding: 0 4px !important;
+    color: #333 !important;
+}
+
+.param-props-row {
+    display: grid !important;
+    grid-template-columns: 120px 1fr auto !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin-bottom: 6px !important;
+}
+
+.param-props-subtitle {
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    color: #555 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+    margin: 8px 0 6px 0 !important;
+    padding-left: 0 !important;
+}
+
+.param-props-label {
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 12px !important;
+    color: #333 !important;
+    white-space: nowrap !important;
+    text-align: left !important;
+    justify-self: start !important;
+}
+
+.param-props-input,
+.param-props-select {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    padding: 3px 6px !important;
+    border: 1px solid #999 !important;
+    border-radius: 2px !important;
+    background: #fff !important;
+    color: #000 !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 12px !important;
+    justify-self: start !important;
+}
+
+.param-props-input,
+.param-props-select {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    padding: 3px 6px !important;
+    border: 1px solid #999 !important;
+    border-radius: 2px !important;
+    background: #fff !important;
+    color: #000 !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 12px !important;
+}
+
+.param-props-readonly {
+    background: #e8e8e8 !important;
+    color: #555 !important;
+    cursor: default !important;
+}
+
+.param-props-scale-value {
+    width: 70px !important;
+    min-width: 70px !important;
+    flex: none !important;
+    text-align: right !important;
+}
+
+.param-props-actions {
+    display: flex !important;
+    gap: 8px !important;
+    padding: 8px 12px !important;
+    border-top: 1px solid #ccc !important;
+}
+
+.param-props-btn {
+    flex: 1 !important;
+    padding: 5px 12px !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 12px !important;
+    background: #fff !important;
+    color: #000 !important;
+    border: 1px solid #888 !important;
+    border-radius: 3px !important;
+    cursor: pointer !important;
+}
+
+.param-props-btn:hover {
+    background: #e8e8e8 !important;
+}
+/* Поле "Вид параметра": нередактируемое, ширина под самое длинное имя типа (TPrmList) */
+.param-props-type-value {
+  flex: 0 0 auto;
+  width: auto;
+}

@@ -1,0 +1,366 @@
+/* --- Table Header & Columns --- */
+#header {
+    height: 30px;
+    display: grid;
+    grid-template-columns:
+        var(--col-name)
+        var(--col-description)
+        var(--col-value)
+        var(--col-unit)
+        1fr;
+    border-bottom: 2px solid #4a4a52;
+    background-color: #0f0f11;
+    position: relative;
+    user-select: none;
+}
+
+#header > div {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-right: 2px solid #4a4a52;
+    font-size: 11px;
+    font-weight: 900;
+    color: #c8f1e0;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    position: relative;
+    text-align: center;
+    -webkit-text-stroke: 0.5px currentColor;
+    text-shadow: 0 0 1px currentColor;
+}
+
+#header > div:last-child {
+    border-right: none;
+}
+
+.col-resizer {
+    position: absolute;
+    right: -3px;
+    top: 0;
+    width: 7px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 20;
+    background-color: transparent;
+}
+
+.col-resizer:hover, .col-resizer.resizing {
+    background-color: var(--accent-blue);
+}
+
+/* --- Channel Rows Container --- */
+#channelRows {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background-color: var(--bg-main);
+}
+
+.channel-row {
+    display: grid;
+    grid-template-columns:
+        var(--col-name)
+        var(--col-description)
+        var(--col-value)
+        var(--col-unit)
+        1fr;
+    height: var(--row-height);
+    border-bottom: none;
+    transition: height 0.05s linear, background-color 0.15s ease;
+    cursor: pointer;
+}
+
+.channel-row:hover {
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+.channel-row.selected {
+    background-color: rgba(0, 210, 255, 0.35) !important;
+    box-shadow: inset 4px 0 0 #55c0a9;
+}
+
+.channel-row.selected .col-graph {
+    background-color: var(--bg-main) !important;
+}
+
+.channel-row.selected .col-graph::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 210, 255, 0.35);
+    pointer-events: none;
+    z-index: 5;
+}
+/* ========================================================================
+   ПОДСВЕТКА КАНАЛОВ, ВЫБРАННЫХ ДЛЯ АНАЛИЗА (совмещение графиков)
+   ========================================================================
+   Применяется к строкам каналов, которые пользователь выбрал для последующего
+   совмещения в одну строку. Прозрачный красноватый фон позволяет визуально
+   проверить, какие именно каналы будут совмещены, до нажатия «Совместить».
+   Используется !important, чтобы подсветка была видна даже если строка
+   одновременно выделена кликом (класс .selected с голубым фоном).
+   Цвет: красный с прозрачностью 15%, чтобы не мешать основному контенту. */
+.channel-row.analysis-selected {
+    background-color: rgba(216, 66, 66, 0.644) !important;
+}
+
+.channel-row > div {
+    padding: 0 6px;
+    display: flex;
+    align-items: center;
+    border-right: none;
+    font-size: var(--font-size, 13px);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    line-height: 1;
+}
+
+.col-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.channel-color-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.channel-title {
+    font-weight: 700;
+    color: #e0e0e0;
+    font-size: var(--font-size, 13px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.col-description {
+    color: #a0a0a5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: calc(var(--font-size, 13px) + 1px);
+    justify-content: center;
+    text-align: center;
+}
+
+.col-value {
+    color: #00d2ff;
+    font-weight: 700;
+    font-size: var(--font-size, 13px);
+    justify-content: center;
+    text-align: center;
+}
+
+.discrete-value-square {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: max(17px, calc(var(--font-size, 13px) + 5px));
+    height: max(17px, calc(var(--font-size, 13px) + 5px));
+    border-radius: 3px;
+    font-weight: 800;
+    font-size: var(--font-size, 13px);
+    line-height: 1;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    user-select: none;
+    pointer-events: none;
+}
+
+.col-unit {
+    color: #b4cff3;
+    font-size: var(--font-size, 13px);
+    justify-content: center;
+    text-align: center;
+}
+
+.channel-row .col-graph {
+    padding: 0;
+    position: relative;
+    background-color: #050505;
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+}
+
+/* --- Cursors Info Footer --- */
+#footer {
+    height: 28px;
+    background-color: #0f0f11;
+    border-top: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    font-size: 11px;
+    font-family: monospace;
+    color: #a0a0a5;
+}
+
+.cursor-stat {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.cursor-stat-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.cursor-stat-item span {
+    color: #00d2ff;
+    font-weight: 700;
+}
+
+/* --- Нижние панели: 2 строки по 25px --- */
+#bottom-panels {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 8px;
+    background-color: #0f0f11;
+    border-top: 2px solid #4a4a52;
+}
+.bottom-row {
+    height: 25px;
+    display: flex;
+    align-items: stretch;
+    border-radius: 4px;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+/* Верхняя строка: редактируемое окно (голубая подсветка) */
+.bottom-row-edit {
+    border: 1px solid #00d2ff;
+    background-color: #0a1418;
+    box-shadow: 0 0 6px rgba(0, 210, 255, 0.35), inset 0 0 4px rgba(0, 210, 255, 0.15);
+}
+.bottom-edit-input {
+    width: 100%;
+    height: 100%;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: #00d2ff;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+    padding: 0 8px;
+    user-select: text;
+    caret-color: #00d2ff;
+}
+.bottom-edit-input::placeholder {
+    color: #3d6a75;
+}
+.bottom-edit-input:focus {
+    background-color: rgba(0, 210, 255, 0.06);
+}
+/* Нижняя строка: 4 окна только для чтения (янтарная подсветка) */
+.bottom-row-read {
+    border: 1px solid #f59e0b;
+    background-color: #14100a;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.3), inset 0 0 4px rgba(245, 158, 11, 0.12);
+}
+.read-cell {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fcd34d;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 6px;
+    user-select: none;
+}
+/* Широкие вертикальные разделительные линии между 4 окнами */
+.read-cell + .read-cell {
+    border-left: 4px solid #f59e0b;
+}
+/* ========================================================================
+   СОВМЕЩЁННАЯ СТРОКА (COMPOSITE ROW) И ЛЕГЕНДА
+   ========================================================================
+   Стили для специальной строки осциллографа, которая объединяет несколько
+   каналов (от 2 до 5) в одну систему координат для сравнения сигналов.
+*/
+/* Основной контейнер совмещённой строки.
+   Наследует базовые стили .channel-row, но добавляет оранжевую полосу слева,
+   чтобы пользователь визуально отличал сгруппированные каналы от одиночных. */
+.channel-row.composite-row {
+    border-left: 3px solid #f59e0b;
+    /* Отключаем анимацию высоты: совмещённая строка должна менять высоту
+       мгновенно, иначе getBoundingClientRect() во время анимации возвращает
+       старое значение и графики рассинхронизируются со строкой. */
+    transition: none;
+}
+
+/* Совмещённая строка в выбранном состоянии */
+.channel-row.composite-row.selected {
+    background-color: rgba(0, 210, 255, 0.35) !important;
+    box-shadow: inset 4px 0 0 #55c0a9 !important;
+    border-left-color: #55c0a9;
+}
+/* Контейнер легенды, расположенный поверх графика.
+   Позиционируется абсолютно внутри .col-graph в левом верхнем углу.
+   ВАЖНО: pointer-events: none означает, что легенда "прозрачна" для мыши.
+   Это позволяет пользователю кликать, ставить курсоры и измерять сигнал
+   прямо сквозь легенду, как будто её там нет. */
+.composite-legend {
+    position: absolute;
+    top: 4px;
+    left: 8px;
+    z-index: 10;
+    background-color: rgba(15, 23, 42, 0.85);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    line-height: 1.4;
+    pointer-events: none;
+    
+    /* width: max-content заставляет легенду расширяться по ширине её содержимого,
+       чтобы текст с именами каналов и значениями НЕ обрезался.
+       Ранее overflow: hidden + max-width: 80% приводили к обрезанию текста. */
+    width: max-content;
+    max-width: 90%;
+}
+/* Отдельный элемент легенды (строка для одного канала).
+   Использует flexbox для аккуратного выравнивания цветного чипа и текста.
+   white-space: nowrap запрещает перенос строки, чтобы значение не "уезжало" вниз. */
+.composite-legend .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap; 
+    /* Примечание: цвет текста (color) задаётся динамически в TS через inline-стили,
+       так как он должен совпадать с цветом графика конкретного канала. */
+}
+/* Цветной чип (квадратик) рядом с именем канала.
+   Базовые размеры и форма задаются здесь.
+   Цвет фона (background-color) задаётся динамически в TS. */
+.composite-legend .legend-color-chip {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0; /* Запрещаем чипу сжиматься, если текст слишком длинный */
+}
+/* Текст значения канала в легенде (имя, значение, единицы).
+   Используем моноширинный шрифт, чтобы цифры значений не "прыгали" 
+   при изменении (например, когда 10.5 меняется на 9.8). */
+.composite-legend .legend-text {
+    font-family: monospace;
+    font-weight: 500;
+}

@@ -1,0 +1,224 @@
+/* ==========================================================================
+   КОМПОНЕНТ СТРУКТУРНОГО ДЕРЕВА УСТРОЙСТВ (tree.css)
+   ========================================================================== */
+
+/* Левая навигационная колонка */
+.left-sidebar-column {
+    width: 220px; 
+    height: 100%;
+    background-color: #ffffff;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    padding-left: 6px;     /* ДОБАВЛЕНО: Аккуратный зазор от левого края окна */
+    color: #000000;
+}
+
+.left-sidebar-column,
+.sidebar-tree-container {
+    color: #000000;
+    font-size: 14px;
+    font-family: Arial, sans-serif;
+}
+
+.tree-location-title {
+    height: 16px;          /* Вертикальный интервал уменьшен до минимума */
+    display: flex;
+    align-items: center;
+    font-size: 14px;       /* Плотный шрифт для компактного отображения */
+    font-weight: 600;      
+    color: #000000;        /* ДОБАВЛЕНО: Явный черный цвет текста */
+    cursor: pointer;
+    margin: 0;
+    padding: 0;
+}
+
+/* Список вложенных ID (схлопывание стандартных отступов списков) */
+.tree-id-list {
+    margin: 0;             
+    padding-top: 0px;      /* Убраны все лишние зазоры сверху и снизу */
+    padding-bottom: 0px;
+    padding-left: 12px;    /* Компактный отступ для визуальной иерархии вложенности */
+    list-style: none;      
+}
+
+/* Конкретная нода устройства в дереве */
+.tree-id-item {
+    height: 16px;          
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-sizing: border-box;
+    font-size: 14px;       
+    font-weight: normal;
+    color: #000000;        /* ДОБАВЛЕНО: Явный черный цвет текста */
+    line-height: 16px;     
+    margin: 0;
+    padding: 0;
+    cursor: pointer;
+}
+
+/* ==========================================================================
+   КЛАСТЕР КНОПОК ДЕРЕВА (Синхронизировано с <details> и <summary>)
+   ========================================================================== */
+
+/* Хитрый трюк: скрываем стандартный треугольник раскрытия браузера у summary */
+.tree-location-title::-webkit-details-marker {
+    display: none;
+}
+.tree-location-title {
+    list-style: none; /* Для современных браузеров */
+}
+
+/* Базовый квадратный контейнер кнопки перед именем Локации */
+.tree-location-title::before {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    width: 9px;                /* Строгий маленький квадрат */
+    height: 9px;
+    border: 1px solid #808080; /* Серая рамка окна */
+    background-color: #ffffff; /* Белый фон внутри квадрата */
+    
+    font-size: 9px;            /* Размер под мелкий квадрат */
+    font-family: monospace;    /* Чтобы плюс/минус встали ровно по центру */
+    line-height: 1;
+    color: #000000;
+    
+    margin-right: 6px;
+    flex-shrink: 0;
+    box-sizing: border-box;
+}
+
+/* Если локация СВЕРНУТА (у details нет атрибута open) — показываем плюс */
+.tree-location:not([open]) .tree-location-title::before {
+    content: "+";
+}
+
+/* Если локация РАЗВЕРНУТА (у details есть атрибута open) — меняем на минус */
+.tree-location[open] .tree-location-title::before {
+    content: "−";              /* Математический знак минуса */
+}
+
+/* Конечные узлы устройств (листья) — полностью убираем маркер, как на скриншоте */
+.tree-id-item.is-leaf::before {
+    display: none;             
+}
+
+/* Дополнительный отступ для текста конечных устройств, чтобы компенсировать */
+/* отсутствие квадратика и красиво выстроить иерархию */
+.tree-id-item.is-leaf {
+    padding-left: 15px;        
+}
+
+/* ДОБАВЛЕНО: Голубая прозрачная полоска-индикатор для активного ini-файла */
+.tree-id-item.is-selected {
+    background-color: rgba(0, 120, 215, 0.18); /* Прозрачный системный синий */
+}
+
+/* Контекстное меню дерева устройств */
+.context-menu {
+    position: fixed !important;
+    z-index: 10000 !important;
+    background: #f0f0f0 !important;
+    border: 1px solid #bbb !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+    border-radius: 3px !important;
+    width: 260px !important;
+    padding: 4px 0 !important;
+    margin: 0 !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 13px !important;
+    color: #333333 !important;
+    overflow: hidden !important;
+}
+
+.context-menu.hidden {
+    display: none !important;
+}
+
+.context-menu .context-menu-item {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 6px 14px !important;
+    margin: 0 !important;
+    border: none !important;
+    outline: none !important;
+    background: transparent !important;
+    color: #333333 !important;
+    line-height: 1.4 !important;
+    cursor: pointer !important;
+    user-select: none !important;
+    white-space: nowrap !important;
+    box-sizing: border-box !important;
+}
+
+.context-menu .context-menu-item:hover {
+    background: #f8f67f !important;
+    color: #000000 !important;
+}
+
+.context-menu .context-menu-item:active {
+    background: #d0d0d0 !important;
+    color: #000000 !important;
+}
+
+/* Скрытие пункта меню (браузерная версия) */
+.context-menu .context-menu-item.ctx-hidden {
+    display: none !important;
+}
+/* Модальное окно изменения ПО */
+/* ── Модальное окно "Обновление программы устройства" ── */
+#fwUpdateOverlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+#fwUpdateOverlay.hidden { display: none; }
+
+.fw-update-modal {
+  width: 660px; max-width: 95vw; max-height: 90vh; overflow: auto;
+  background: #f0f0f0; color: #222;
+  border: 1px solid #777; box-shadow: 0 10px 35px rgba(0,0,0,.45);
+  font-family: system-ui, "Segoe UI", sans-serif; font-size: 13px;
+}
+.fw-update-header {
+  display: flex; justify-content: space-between; align-items: center;
+  background: #3e5f5f; color: #fff; padding: 6px 10px; font-weight: 600;
+}
+.fw-update-close { background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; }
+.fw-update-body { padding: 12px 14px; }
+.fw-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.fw-row label { width: 130px; flex: 0 0 130px; color: #333; }
+.fw-row input, .fw-row select {
+  flex: 1; padding: 3px 6px; border: 1px solid #999; background: #fff; font-size: 13px;
+}
+.fw-id-input { background: #3f8fd8; color: #fff; }   /* подсветка ID-строки, как в старом аджастере */
+.fw-row.fw-plain span { color: #555; }
+.fw-update-warning { color: #c00000; margin: 10px 0; line-height: 1.45; }
+.fw-update-warning p { margin: 0 0 10px 0; }
+.fw-note { color: #555; font-size: 12px; margin-top: 4px; }
+.fw-update-footer { padding: 10px 14px 14px; border-top: 1px solid #ccc; }
+.fw-update-footer button, .fw-update-body button {
+  padding: 6px 14px; border: 1px solid #888; background: #e4e4e4; cursor: pointer; font-size: 13px;
+}
+.fw-update-footer button:hover, .fw-update-body button:hover { background: #d5d5d5; }
+#fwUpdateCreateCopyBtn { width: 100%; margin-bottom: 10px; }
+.fw-footer-row { display: flex; gap: 10px; }
+.fw-footer-row button { flex: 1; }
+
+/* Принудительная видимость ID-поля в модальном окне обновления прошивки */
+.fw-update-modal .fw-id-input {
+    background-color: #3f8fd8 !important;
+    color: #ffffff !important;
+    font-weight: bold !important;
+}
+/* Резервные копии (файл перенесён в BackUp) — красный текст */
+.tree-id-item.is-backup {
+    color: #c00 !important;
+}

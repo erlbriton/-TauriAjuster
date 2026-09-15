@@ -1,0 +1,18 @@
+/* ==========================================================================
+   ГЛАВНЫЙ ДИСПЕТЧЕР СТИЛЕЙ ПРИЛОЖЕНИЯ (style.css)
+   ========================================================================== */
+
+@import url('./layout.css');
+@import url('./oscilloscope.css');
+@import url('./toolbar.css');
+@import url('./tree.css');
+@import url('./settings.css');
+@import url('./table.css');
+@import url('./ini-editor.css');
+@import url('./modbus-scan.css');
+@import url('./report.css');
+@import url('./cmdline.css');
+@import url('./new-device.css');
+@import url('./backup.css');
+@import url('./search.css');
+@import url('./parameterProperties.css');

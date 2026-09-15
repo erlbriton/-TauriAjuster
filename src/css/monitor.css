@@ -1,0 +1,37 @@
+/* Базовое состояние: контейнер скрыт */
+#osc-container.hidden {
+    display: none !important;
+}
+
+/* Контейнер осциллографа в потоке верстки */
+#osc-container {
+    display: flex;
+    flex-direction: column;
+    flex: none; /* Ширина управляется ресайзером */
+    background: #000;
+    min-height: 200px;
+}
+
+/* Растягиваем область с графиками внутри контейнера */
+.osc-content-area {
+    flex: 1;
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Гарантируем, что холст PIXI займет всю область контента */
+#osc-container canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
+/* Выделение строки в таблице Modbus (клик или поиск параметра) */
+#grid-data-rows tr[data-key].selected {
+    background-color: #00d2ff !important;
+    color: #000000 !important;
+}
+
+#grid-data-rows tr[data-key].selected td {
+    color: #06060e !important;
+}

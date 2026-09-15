@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Просмотр осциллограммы (.rec)</title>
+    <link rel="stylesheet" href="/src/css/style.css" />
+    <link rel="stylesheet" href="/src/css/monitor.css" />
+    <link rel="stylesheet" href="/src/oscilloscope/styles/base.css" />
+    <link rel="stylesheet" href="/src/oscilloscope/styles/layout.css" />
+    <link rel="stylesheet" href="/src/oscilloscope/styles/oscilloscope.css" />
+    <link rel="stylesheet" href="/src/oscilloscope/styles/toolbar.css" />
+    <link rel="stylesheet" href="/src/oscilloscope/styles/grid.css" />
+    <link rel="stylesheet" href="/src/oscilloscope/styles/components.css" />
+    <style>
+      body { margin: 0; padding: 0; background: #050505; color: #fff; font-family: sans-serif; overflow: hidden; }
+      #rec-viewer-container { width: 100vw; height: 100vh; position: relative; }
+    </style>
+  </head>
+  <body>
+    <div id="rec-viewer-container"></div>
+    <input type="file" id="filePicker" accept=".rec" style="display: none" />
+    <script type="module" src="/src/rec-viewer.ts"></script>
+  </body>
+</html>

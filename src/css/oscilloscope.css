@@ -1,0 +1,218 @@
+#osc-container {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    height: 100%;
+    width: 50%;
+    overflow: hidden;
+    background: #000;
+    position: relative;
+}
+
+/* В режиме full-window скрываем таблицу справа */
+#osc-container.full-window {
+    z-index: 1000;
+    width: 100% !important; /* Перебивает inline-ширину, установленную ресайзером */
+}
+
+#osc-container.full-window ~ .panel-right {
+    display: none !important;
+}
+
+#osc-container.full-window ~ .osc-resizer {
+    display: none;
+}
+
+/* =========================================
+   ПАНЕЛЬ ИНСТРУМЕНТОВ И КНОПКИ (Ретро 3D Темная Тема)
+   ========================================= */
+.osc-toolbar {
+    display: flex;
+    flex: 0 0 auto;
+    padding: 4px 6px;
+    background: #333333; /* Базовый темный фон панели */
+    border-bottom: 2px solid #1a1a1a;
+    gap: 4px;
+}
+
+.osc-btn {
+    width: 60px;
+    height: 30px;
+    background: #3a3a3a; /* Цвет самой кнопки */
+    /* Имитация 3D-выпуклости */
+    border-top: 2px solid #5d5d5d;
+    border-left: 2px solid #5d5d5d;
+    border-bottom: 2px solid #151515;
+    border-right: 2px solid #151515;
+    border-radius: 0; /* Классические кнопки строго прямоугольные */
+    color: #cccccc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.osc-btn:hover {
+    background: #424242;
+    color: #ffffff;
+}
+
+/* Эффект вдавленности при нажатии */
+.osc-btn:active {
+    background: #333333;
+    border-top: 2px solid #151515;
+    border-left: 2px solid #151515;
+    border-bottom: 2px solid #5d5d5d;
+    border-right: 2px solid #5d5d5d;
+}
+
+/* Сдвиг иконки при нажатии для реалистичности */
+.osc-btn:active svg {
+    transform: translate(1px, 1px);
+}
+
+.osc-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* =========================================
+   КНОПКА "СВОЙСТВА" (НАСТРОЙКА РАЗМЕРОВ И ЦВЕТА)
+   ========================================= */
+.toolbar-group button.osc-btn-properties,
+.toolbar-group .osc-btn-properties {
+    height: 32px;                     /* Высота кнопки */
+    width: 64px;                      /* Ширина (в 2 раза больше высоты) */
+    background-color: #535a63;        /* Основной цвет */
+    border-top: 2px solid #5599ff;    /* Верхняя и левая рамка (светлый блик 3D) */
+    border-left: 2px solid #5599ff;
+    border-bottom: 2px solid #002b80; /* Нижняя и правая рамка (тень 3D) */
+    border-right: 2px solid #002b80;
+    color: #ffffff;                    /* Цвет иконки */
+}
+
+.toolbar-group button.osc-btn-properties:hover,
+.toolbar-group .osc-btn-properties:hover {
+    background-color: #1a66ff;
+    color: #ffffff;
+}
+
+.toolbar-group button.osc-btn-properties:active,
+.toolbar-group .osc-btn-properties:active {
+    background-color: #0044cc;
+    border-top: 2px solid #002b80;
+    border-left: 2px solid #002b80;
+    border-bottom: 2px solid #5599ff;
+    border-right: 2px solid #5599ff;
+}
+
+/* =========================================
+   ИНДИКАТОР СВЯЗИ С КОНТРОЛЛЕРОМ (LED)
+   ========================================= */
+.toolbar-group .status-badge {
+    display: inline-block;
+    width: 64px;                      /* Габариты равны кнопке "Свойства" */
+    height: 32px;                     /* Габариты равны кнопке "Свойства" */
+    box-sizing: border-box;
+    align-self: center;
+    margin-left: 4px;                 /* Минимальный отступ вплотную к кнопке */
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Связь есть (Зеленый цвет со свечением) */
+.toolbar-group .status-badge.connected {
+    background-color: #00e676;
+    border-top: 2px solid #69f0ae;
+    border-left: 2px solid #69f0ae;
+    border-bottom: 2px solid #00a152;
+    border-right: 2px solid #00a152;
+    box-shadow: 0 0 6px rgba(0, 230, 118, 0.7);
+}
+
+/* Связи нет (Красный цвет) */
+.toolbar-group .status-badge.disconnected {
+    background-color: #ff3333;
+    border-top: 2px solid #ff6666;
+    border-left: 2px solid #ff6666;
+    border-bottom: 2px solid #b2102f;
+    border-right: 2px solid #b2102f;
+    box-shadow: 0 0 4px rgba(255, 51, 51, 0.5);
+}
+
+/* =========================================
+   ОСНОВНАЯ РАБОЧАЯ ОБЛАСТЬ (Таблица + Графики)
+   ========================================= */
+.osc-main-area {
+    display: flex;
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* Обертка таблицы */
+.osc-table-wrapper {
+    flex: 0 0 460px;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: #0a0a0a;
+}
+
+/* Главный разделитель между таблицей и графиками */
+.osc-main-splitter {
+    width: 4px;
+    background: #333;
+    cursor: col-resize;
+    flex: 0 0 auto;
+    z-index: 100;
+}
+
+.osc-main-splitter:hover, .osc-main-splitter.active {
+    background: #0055ff;
+}
+
+.osc-data-grid {
+    table-layout: fixed;
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.osc-data-grid th {
+    background: #222;
+    color: #aaa;
+    padding: 6px 8px;
+    font-size: 14px;
+    border-right: 1px solid #333;
+    border-bottom: 2px solid #333;
+    position: relative;
+    height: 31px;
+}
+
+/* Внутренние ресайзеры колонок */
+.osc-table-resizer {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 8px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 10;
+}
+
+.osc-table-resizer:hover, .osc-table-resizer.active {
+    background: rgba(0, 85, 255, 0.3);
+}
+
+/* Область графиков */
+.osc-canvas-column {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    background: #000;
+    position: relative;
+    overflow: hidden;
+}

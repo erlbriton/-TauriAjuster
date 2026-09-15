@@ -1,0 +1,147 @@
+/* Окно "Командная строка" */
+.cmdline-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 11700 !important;
+    background: rgba(0, 0, 0, 0.45) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.cmdline-overlay.hidden {
+    display: none !important;
+}
+
+.cmdline-window {
+    width: 700px !important;
+    max-width: 95% !important;
+    height: 500px !important;
+    max-height: 92% !important;
+    background: #f0f0f0 !important;
+    border: 1px solid #888 !important;
+    border-radius: 4px !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    color: #333333 !important;
+}
+
+.cmdline-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 6px 10px !important;
+    background: #d8d8d8 !important;
+    border-bottom: 1px solid #bbb !important;
+    margin: 0 !important;
+}
+
+.cmdline-header-title {
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #333333 !important;
+}
+
+.cmdline-close-btn {
+    background: none !important;
+    border: none !important;
+    color: #555 !important;
+    font-size: 14px !important;
+    cursor: pointer !important;
+    padding: 0 4px !important;
+    margin: 0 !important;
+}
+
+.cmdline-close-btn:hover {
+    color: #000 !important;
+}
+
+.cmdline-controls {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 8px 10px !important;
+    background: #ececec !important;
+    border-bottom: 1px solid #ccc !important;
+    margin: 0 !important;
+    flex-wrap: wrap !important;
+}
+
+.cmdline-label {
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    color: #333333 !important;
+}
+
+.cmdline-select {
+    padding: 2px 4px !important;
+    border: 1px solid #999 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 12px !important;
+    margin: 0 !important;
+}
+
+.cmdline-fe-input {
+    width: 36px !important;
+    padding: 2px 4px !important;
+    border: 1px solid #999 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 12px !important;
+    margin: 0 !important;
+}
+
+.cmdline-clear-btn {
+    margin-left: auto !important;
+    padding: 3px 14px !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 12px !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: 1px solid #999 !important;
+    border-radius: 3px !important;
+    cursor: pointer !important;
+}
+
+.cmdline-clear-btn:hover {
+    background: #e8e8e8 !important;
+}
+
+.cmdline-output {
+    flex: 1 !important;
+    background: #000000 !important;
+    color: #ffffff !important;
+    font-family: 'Courier New', monospace !important;
+    font-size: 13px !important;
+    line-height: 1.45 !important;
+    padding: 8px 10px !important;
+    margin: 0 !important;
+    overflow-y: auto !important;
+    white-space: pre-wrap !important;
+    word-break: break-all !important;
+}
+
+.cmdline-input-row {
+    padding: 8px 10px !important;
+    background: #ececec !important;
+    border-top: 1px solid #ccc !important;
+    margin: 0 !important;
+}
+
+.cmdline-input {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 4px 6px !important;
+    border: 1px solid #999 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: 'Courier New', monospace !important;
+    font-size: 13px !important;
+    margin: 0 !important;
+}

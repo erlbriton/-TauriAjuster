@@ -1,0 +1,134 @@
+:root {
+    --col-name: 100px;
+    --col-description: 50px;
+    --col-value: 90px;
+    --col-unit: 60px;
+    --row-height: 25px;
+    --font-size: 13px;
+    --bg-main: #0a0a0b;
+    --bg-header: #0f0f11;
+    --bg-card: #141416;
+    --border-color: #2a2a2c;
+    --accent-blue: #00d2ff;
+    --accent-green: #10b981;
+    --accent-red: #ef4444;
+    --accent-amber: #f59e0b;
+    --text-primary: #e0e0e0;
+    --text-muted: #a0a0a5;
+}
+
+#osc-container,
+#app-viewport {
+    background-color: #050507;
+    color: var(--text-primary);
+    font-family: 'Inter', 'Roboto', system-ui, -apple-system, sans-serif;
+    user-select: none;
+    box-sizing: border-box;
+}
+
+#osc-container *,
+#app-viewport * {
+    box-sizing: border-box;
+}
+
+/* --- Оверлей ошибки соединения --- */
+.oscilloscope-connection-error-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    backdrop-filter: blur(4px);
+}
+
+.oscilloscope-connection-error-modal {
+    max-width: 400px;
+    padding: 30px;
+    text-align: center;
+    border: 1px solid #ff4d4d;
+    box-shadow: 0 0 20px rgba(255, 77, 77, 0.2);
+    background-color: #1a1a1c;
+    border-radius: 8px;
+}
+
+.oscilloscope-connection-error-icon {
+    color: #ff4d4d;
+    font-size: 48px;
+    margin-bottom: 20px;
+}
+
+.oscilloscope-connection-error-title {
+    margin-bottom: 15px;
+    color: #fff;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.oscilloscope-connection-error-message {
+    color: #ccc;
+    line-height: 1.5;
+    margin-bottom: 25px;
+    font-size: 14px;
+}
+
+.oscilloscope-connection-error-hint {
+    color: #94a3b8;
+    font-size: 13px;
+}
+
+/* --- Модальное окно «Нет связи» --- */
+.osc-connection-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    backdrop-filter: blur(4px);
+}
+.osc-connection-modal {
+    min-width: 320px;
+    max-width: 420px;
+    padding: 30px 40px;
+    text-align: center;
+    background-color: #141416;
+    border: 1px solid #ef4444;
+    border-radius: 10px;
+    box-shadow: 0 0 30px rgba(239, 68, 68, 0.35);
+}
+.osc-connection-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+.osc-connection-title {
+    color: #ffffff;
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+.osc-connection-message {
+    color: #cccccc;
+    font-size: 14px;
+    line-height: 1.5;
+    margin-bottom: 20px;
+}
+.osc-connection-close-btn {
+    padding: 8px 28px;
+    background-color: #ef4444;
+    border: none;
+    border-radius: 6px;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+.osc-connection-close-btn:hover {
+    background-color: #dc2626;
+}

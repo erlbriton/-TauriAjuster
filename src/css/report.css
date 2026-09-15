@@ -1,0 +1,199 @@
+/* Окна создания и предпросмотра отчёта */
+.report-create-overlay,
+.report-preview-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 11600 !important;
+    background: rgba(0, 0, 0, 0.45) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.report-create-overlay.hidden,
+.report-preview-overlay.hidden {
+    display: none !important;
+}
+
+.report-create-window,
+.report-preview-window {
+    background: #f0f0f0 !important;
+    border: 1px solid #888 !important;
+    border-radius: 4px !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    color: #333333 !important;
+}
+
+.report-create-window {
+    width: 480px !important;
+    max-width: 92% !important;
+}
+
+.report-preview-window {
+    width: 940px !important;
+    max-width: 95% !important;
+    height: 85% !important;
+}
+
+.report-create-header,
+.report-preview-header {
+    padding: 8px 12px !important;
+    background: #d8d8d8 !important;
+    border-bottom: 1px solid #bbb !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #333333 !important;
+    margin: 0 !important;
+}
+
+.report-create-body {
+    padding: 12px !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+}
+
+.report-field {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin: 0 !important;
+}
+
+.report-field-label {
+    width: 130px !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #333333 !important;
+}
+
+.report-field input[type='text'],
+.report-field input[type='number'] {
+    flex: 1 !important;
+    padding: 4px 6px !important;
+    border: 1px solid #999 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 13px !important;
+    margin: 0 !important;
+}
+
+.report-field input[type='number'] {
+    flex: 0 0 80px !important;
+}
+
+.report-checkbox {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 12px !important;
+    color: #333333 !important;
+    margin: 0 !important;
+    cursor: pointer !important;
+}
+
+.report-checkbox input {
+    margin: 0 !important;
+}
+
+.report-create-body button,
+.report-create-footer button,
+.report-preview-footer button {
+    padding: 5px 14px !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 13px !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: 1px solid #999 !important;
+    border-radius: 3px !important;
+    cursor: pointer !important;
+    margin: 0 !important;
+}
+
+.report-create-body button:hover,
+.report-create-footer button:hover,
+.report-preview-footer button:hover {
+    background: #e8e8e8 !important;
+}
+
+.report-status {
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 12px !important;
+    color: #333333 !important;
+    min-height: 16px !important;
+    margin: 0 !important;
+}
+
+.report-progress {
+    width: 100% !important;
+    height: 14px !important;
+    border: 1px solid #999 !important;
+    background: #ffffff !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+}
+
+.report-progress-bar {
+    height: 100% !important;
+    width: 0% !important;
+    background: #2eb82e !important;
+    transition: width 0.15s linear !important;
+}
+
+.report-create-footer,
+.report-preview-footer {
+    padding: 8px 12px !important;
+    border-top: 1px solid #bbb !important;
+    background: #e4e4e4 !important;
+    margin: 0 !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+}
+
+.report-preview-body {
+    flex: 1 !important;
+    overflow: auto !important;
+    background: #ffffff !important;
+    padding: 12px !important;
+    margin: 0 !important;
+}
+
+/* Таблица отчёта в предпросмотре */
+.report-preview-body table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 12px !important;
+    margin: 0 !important;
+}
+
+.report-preview-body th,
+.report-preview-body td {
+    border: 1px solid #999 !important;
+    padding: 3px 6px !important;
+    text-align: left !important;
+    vertical-align: top !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+}
+
+.report-preview-body th {
+    background: #d8d8d8 !important;
+    font-weight: 600 !important;
+}
+
+.report-preview-body .report-title-cell {
+    text-align: center !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+}
