@@ -13,6 +13,7 @@ import type { AppState } from '../core/app-state.js';
 export function getFileStore(): Map<string, StoredFileEntry> {
     return fileStore;
 }
+import { decodeTextBuffer } from './textFileReader.js';
 
 /**
  * Открывает INI-файл через File System Access API.
@@ -37,6 +38,10 @@ export interface StoredFileEntry {
     id: string;
     content: string;
     lastModified: number;
+    /** Абсолютный путь к файлу на диске (для открытия во внешнем редакторе).
+     *  Необязательное поле: старые записи из браузерной версии не имеют пути,
+     *  новые записи из Tauri-автозагрузчика получают полный путь. */
+    path?: string;
 }
 const fileStore: Map<string, StoredFileEntry> = new Map();
 
@@ -194,10 +199,13 @@ interface OscIniFile {
 export async function processSingleFileContent(
     content: string,
     fileName: string,
-    appState: AppState,
+    stateObj: AppState,
     sourceFile?: File,
     sourceHandle?: FileSystemFileHandle,
     parentHandle?: FileSystemDirectoryHandle,
+    /** Абсолютный путь к файлу на диске (для открытия во внешнем редакторе).
+     *  Необязательный параметр: передаётся из Tauri-автозагрузчика. */
+    filePath?: string
 ): Promise<void> {
   currentIniFileName = fileName;
   try {
@@ -222,9 +230,10 @@ export async function processSingleFileContent(
       throw new Error('Неверный формат INI файла (отсутствуют стандартные секции)');
     }
 
-   // appState.currentDeviceConfig = config;
-    appState.currentIniContent = content;
-    appState.currentIniConfig = iniConfig;
+    // Сохраняем текущий INI-файл и его распарсенную конфигурацию
+    // в глобальное состояние приложения (через параметр stateObj).
+    stateObj.currentIniContent = content;
+    stateObj.currentIniConfig = iniConfig;
 
     const isAdded = addDeviceToRegistry(iniConfig);
     setCurrentIniConfig(iniConfig);
@@ -248,6 +257,7 @@ export async function processSingleFileContent(
             id: String(id),
             content,
             lastModified: sourceFile ? sourceFile.lastModified : Date.now(),
+            path: filePath,  // Сохраняем путь к файлу на диске
         });
     }
 
@@ -343,9 +353,28 @@ export async function reloadIniFilesFromDisk(): Promise<{
         if (!entry) continue;
 
         try {
-            // Если есть хэндл — берём свежий File с диска, иначе старый снимок
-            const fileToRead = entry.handle ? await entry.handle.getFile() : entry.file;
-            const newContent = await readFileAsText(fileToRead);
+            let newContent: string;
+            
+            // Приоритет чтения содержимого файла:
+            // 1. Если есть путь на диске (Tauri-автозагрузчик) — читаем через Rust
+            // 2. Если есть хэндл (браузерный File System Access API) — берём свежий File
+            // 3. Иначе — используем старый снимок (изменения не обнаружим)
+            if (entry.path) {
+                // Читаем файл через Rust-команду: она возвращает сырые байты
+                const rawBytes = await window.__TAURI__.core.invoke<number[]>('read_ini_file', {
+                    path: entry.path
+                });
+                // Декодируем из windows-1251 через существующую функцию
+                // (та же, что используется в автозагрузчике)
+                const buffer = new Uint8Array(rawBytes).buffer as ArrayBuffer;
+                newContent = decodeTextBuffer(buffer);
+            } else if (entry.handle) {
+                const freshFile = await entry.handle.getFile();
+                newContent = await readFileAsText(freshFile);
+            } else {
+                // Нет ни пути, ни хэндла — используем снимок в памяти
+                newContent = await readFileAsText(entry.file);
+            }
 
             if (newContent === entry.content) {
                 results.unchanged++;
@@ -435,61 +464,48 @@ export async function editDeviceIniFile(deviceId: string): Promise<void> {
         return;
     }
 
-    if (!entry.handle) {
-        console.error(`[file-loader] Редактирование невозможно: у записи устройства "${deviceId}" нет handle. file=${entry.file?.name ?? '—'}, location=${entry.location}, id=${entry.id}`);
-        console.error(`[file-loader] Все записи в fileStore:`, Array.from(fileStore.entries()).map(([k, e]) => ({ key: k, fileName: e.file?.name, hasHandle: !!e.handle, id: e.id })));
-        showCompactError('Редактирование доступно только для файлов, открытых через File System Access API.');
-        return;
-    }
+    // Проверка на наличие handle не нужна для внешнего редактора:
+    // внешний редактор открывает файл напрямую через путь на диске,
+    // а не через браузерный File System Access API.
+    // Поэтому убираем проверку if (!entry.handle).
 
     // Гарантированно получаем самое свежее содержимое с диска перед открытием редактора,
-    // чтобы избежать показа устаревших данных из кэша entry.content
+    // чтобы избежать показа устаревших данных из кэша entry.content.
+    // Читаем напрямую через entry.file (File.text()), а не через handle.
     let contentToEdit = entry.content;
     try {
-        const freshFile = await entry.handle.getFile();
-        contentToEdit = await readFileAsText(freshFile);
+        contentToEdit = await readFileAsText(entry.file);
         // Синхронизируем кэш, чтобы последующие операции имели актуальные данные
-        entry.file = freshFile;
         entry.content = contentToEdit;
         entry.lastModified = Date.now();
     } catch (err) {
         console.warn('[file-loader] Не удалось прочитать свежий файл перед редактированием, используем кэш:', err);
     }
 
-    const newContent = await openIniEditor(contentToEdit, `Редактирование: ${entry.file.name}`);
-    if (newContent === null) return; // Отмена / Escape
-
-    try {
-        // Записываем на диск в windows-1251
-        const bytes = encodeToWindows1251(newContent);
-        const writable = await entry.handle.createWritable();
-        await writable.write(bytes);
-        await writable.close();
-
-        // Перечитываем (чтобы гарантированно взять то, что на диске)
-        const freshFileAfterSave = await entry.handle.getFile();
-        const freshContent = await readFileAsText(freshFileAfterSave);
-        entry.file = freshFileAfterSave;
-        entry.content = freshContent;
-        entry.lastModified = Date.now();
-
-        // Обновляем реестр устройства
-        const coreParser = new CoreIniParser();
-        const parseResult = coreParser.parse(freshContent);
-        const newIniConfig = new IniConfig(parseResult);
-        const newConfig = parseResult.rawSections as RawIniConfig;
-
-        if (!updateDeviceInRegistry(entry.location, entry.id, newIniConfig, newConfig)) {
-            showCompactError(`Не удалось обновить устройство ${entry.id} в реестре.`);
-        }
-
-        renderDeviceTree();
-        syncFilesToOscilloscope();
-    } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        showCompactError(`Ошибка сохранения: ${msg}`);
-        console.error('[file-loader] editDeviceIniFile error:', err);
+    // Используем сохранённый абсолютный путь к файлу на диске.
+    // Поле path заполняется автозагрузчиком Tauri при загрузке файла.
+    if (!entry.path) {
+        console.error(`[file-loader] У файла ${entry.file.name} нет сохранённого пути на диске.`);
+        showCompactError('Не удалось определить путь к файлу для редактирования.');
+        return;
     }
+
+    // Открываем файл в редакторе по умолчанию операционной системы.
+    // Внешний редактор редактирует файл напрямую на диске.
+    // После редактирования пользователь нажмёт "Обновить список устройств",
+    // и приложение перечитает все INI-файлы и покажет изменения.
+    try {
+        await window.__TAURI__.core.invoke<void>('open_in_default_editor', {
+            path: entry.path
+        });
+    } catch (err) {
+        console.error('[file-loader] Ошибка открытия файла во внешнем редакторе:', err);
+        showIdModal('Ошибка открытия файла: ' + (err instanceof Error ? err.message : String(err)));
+    }
+    
+    // Больше не записываем изменения и не перечитываем файл здесь —
+    // это произойдёт при нажатии кнопки "Обновить список устройств"
+    return;
 }
 function syncFilesToOscilloscope(): void {
   const osc = window.osc;

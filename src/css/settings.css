@@ -44,19 +44,48 @@
 
 /* Селекторы интерфейса */
 .select-blue {
-    background-color: #0055ff;
+    /* ОТКЛЮЧАЕМ нативную системную отрисовку закрытого списка.
+       Без этого WebKitGTK рисует закрытую плашку системной кнопкой GTK
+       (светло-серой) и игнорирует background-color, а CSS применяется
+       только к открытому списку опций. */
+    appearance: none;
+    -webkit-appearance: none;
+    /* Цветной фон закрытой плашки */
+    background-color: #67bbb4;
+    /* Самодельная стрелка вместо исчезнувшей нативной:
+       белый треугольник SVG, прижатый к правому краю плашки */
+    background-image: url("data:image/svg+xml;utf8,<svg%20xmlns='http://www.w3.org/2000/svg'%20width='10'%20height='6'><path%20d='M0%200%20L5%206%20L10%200%20Z'%20fill='white'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 4px center;
     color: #ffffff;
     border: 1px solid #7b7b7b;
     font-weight: bold;
     font-size: 14px;
     padding: 2px;
+    /* Резервируем место под стрелку, чтобы текст не наезжал на неё */
+    padding-right: 18px;
 }
 
 .select-gray {
-    background-color: #e1e1e1;
-    color: #000000;
+    /* То же лечение, что у .select-blue: закрытую плашку рисует вебвью
+       по нашему CSS, а не системная тема GTK */
+    appearance: none;
+    -webkit-appearance: none;
+    /* Цветной фон вместо очень светлого (#e1e1e1), единообразно
+       с баннерами BUS и BPS */
+    background-color: #0055ff;
+    /* Та же самодельная белая стрелка справа */
+    background-image: url("data:image/svg+xml;utf8,<svg%20xmlns='http://www.w3.org/2000/svg'%20width='10'%20height='6'><path%20d='M0%200%20L5%206%20L10%200%20Z'%20fill='white'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 4px center;
+    /* Белый жирный текст для контраста на цветном фоне */
+    color: #ffffff;
+    font-weight: bold;
     border: 1px solid #7b7b7b;
     padding: 2px;
+    padding-right: 18px;
+    /* Ширину и центрирование сохраняем как было: ширина списка COM —
+       отдельная отложенная задача */
     width: 55px;
     text-align: center;
 }
@@ -86,4 +115,17 @@
     margin-bottom: 8px;
     border: 1px solid #5a5a5a;
     white-space: nowrap;
+}
+/* Окантовка активного (сфокусированного) баннера связи BUS/COM/BPS.
+   В проекте нет собственного правила :focus для селекторов, поэтому
+   WebKitGTK рисует нативное зелёное кольцо (акцент темы Linux Mint).
+   Это правило переопределяет его: селектор с :focus срабатывает только
+   пока элемент активен, то есть ровно для "активного баннера". */
+.select-blue:focus,
+.select-gray:focus {
+    /* Толщина, стиль и ЦВЕТ рамки. Подставь любой свой hex вместо #ffffff:
+       например #0055ff (синий), #ff8800 (оранжевый), #00aa00 (зелёный) */
+    outline: 2px solid #f87575;
+    /* Зазор между краем плашки и рамкой, чтобы они не сливались */
+    outline-offset: 1px;
 }

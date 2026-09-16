@@ -67,8 +67,15 @@ export async function autoLoadDevicesFolder(appState: AppState): Promise<number>
                 lastModified: info.last_modified_ms,
             });
 
-            // Прогоняем файл через тот же конвейер, что и ручное открытие
-            await processSingleFileContent(content, info.name, appState, file);
+            // Получаем абсолютный путь к папке Devices от Rust-стороны
+            const devicesPath = await invoke<string | null>('get_devices_folder_path');
+            
+            // Формируем полный путь к файлу: папка Devices + относительный путь
+            const fullPath = devicesPath ? `${devicesPath}/${info.relative_path}` : undefined;
+            
+            // Прогоняем файл через тот же конвейер, что и ручное открытие,
+            // передавая полный путь для последующего открытия во внешнем редакторе
+            await processSingleFileContent(content, info.name, appState, file, undefined, undefined, fullPath);
             loaded++;
         } catch (err) {
             // Ошибка одного файла не должна останавливать загрузку остальных

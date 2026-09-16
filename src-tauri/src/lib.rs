@@ -276,6 +276,87 @@ fn close_serial_port(state: tauri::State<'_, SerialState>) -> Result<(), String>
     Ok(())
 }
 
+/// Команда: открыть файл в редакторе по умолчанию операционной системы.
+/// Кроссплатформенная: использует xdg-open (Linux), open (macOS), cmd /C start (Windows).
+/// Возвращается сразу после запуска процесса редактора (не дожидается его закрытия).
+#[tauri::command]
+fn open_in_default_editor(path: String) -> Result<(), String> {
+    eprintln!("[RUST] open_in_default_editor: переданный путь = '{}'", path);
+    
+    // Преобразуем относительный путь в абсолютный.
+    // Если путь уже абсолютный, canonicalize его не изменит.
+    // canonicalize также разрешает символические ссылки и убирает ".." и ".".
+    let absolute_path = std::fs::canonicalize(&path)
+        .map_err(|e| format!("Не удалось преобразовать путь '{}' в абсолютный: {}", path, e))?;
+    
+    eprintln!("[RUST] open_in_default_editor: абсолютный путь = '{}'", absolute_path.display());
+    
+    // Проверяем, что файл существует перед открытием
+    if !absolute_path.exists() {
+        return Err(format!("Файл не найден: {}", absolute_path.display()));
+    }
+    
+    // Преобразуем PathBuf в обычную String (избегаем проблем с Cow)
+    let path_str = absolute_path.to_string_lossy().into_owned();
+    
+    // Выбираем команду в зависимости от ОС на этапе компиляции
+    #[cfg(target_os = "windows")]
+    let result = std::process::Command::new("cmd")
+        .args(["/C", "start", "", &path_str])
+        .spawn();
+
+    #[cfg(target_os = "macos")]
+    let result = std::process::Command::new("open")
+        .arg(&path_str)
+        .spawn();
+
+    #[cfg(target_os = "linux")]
+    let result = std::process::Command::new("xdg-open")
+        .arg(&path_str)
+        .spawn();
+
+    // Проверяем, что процесс редактора успешно запущен
+    result.map(|_| ()).map_err(|e| format!("Не удалось открыть файл в редакторе: {}", e))
+}
+
+/// Команда: вернуть абсолютный путь к папке Devices рядом с исполняемым файлом.
+/// Возвращает None, если папка не найдена.
+#[tauri::command]
+fn get_devices_folder_path() -> Option<String> {
+    // Ищем папку Devices рядом с исполняемым файлом (exe/bin)
+    let exe_dir = std::env::current_exe()
+        .ok()?
+        .parent()?
+        .to_path_buf();
+    
+    let devices_path = exe_dir.join("Devices");
+    
+    if devices_path.exists() && devices_path.is_dir() {
+        Some(devices_path.to_string_lossy().into_owned())
+    } else {
+        None
+    }
+}
+
+/// Команда: прочитать INI-файл по абсолютному пути и вернуть сырые байты.
+/// Декодирование из windows-1251 выполняется на стороне TypeScript через
+/// существующую функцию decodeTextBuffer (та же, что в автозагрузчике).
+/// Используется для перечитывания файлов, изменённых внешним редактором.
+#[tauri::command]
+fn read_ini_file(path: String) -> Result<Vec<u8>, String> {
+    eprintln!("[RUST] read_ini_file: путь = '{}'", path);
+    
+    // Читаем сырые байты файла
+    let bytes = std::fs::read(&path)
+        .map_err(|e| format!("Не удалось прочитать файл '{}': {}", path, e))?;
+    
+    eprintln!("[RUST] read_ini_file: прочитано {} байт", bytes.len());
+    
+    // Возвращаем сырые байты: декодирование из windows-1251 будет
+    // выполнено на стороне TypeScript через decodeTextBuffer
+    Ok(bytes)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -304,7 +385,10 @@ pub fn run() {
             list_serial_ports,
             open_serial_port,
             write_serial_port,
-            close_serial_port
+            close_serial_port,
+            open_in_default_editor,
+            get_devices_folder_path,
+            read_ini_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
