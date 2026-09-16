@@ -1,6 +1,9 @@
 // src/main.ts
 
-import { SerialConnection } from './serial/serial.js';
+// Нативная реализация последовательного порта через Tauri (Rust).
+// Заменяет браузерный SerialConnection: Web Serial API недоступен
+// в webview Tauri, поэтому вся работа с портом идёт через Rust-команды.
+import { TauriSerialPort } from './serial/tauri-serial.js';
 import { initUI } from './ui/uiManager.js';
 import { ModbusParser } from './serial/modbus.js';
 import { Oscilloscope } from './oscilloscope';
@@ -47,7 +50,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.osc = osc;
         await osc.initialize(oscContainer ?? undefined);
 
-        const serial = new SerialConnection();
+        // Создаём нативный порт: внутри он вызывает Rust-команды
+        // (open_serial_port / write_serial_port / close_serial_port)
+        // и принимает байты через событие "serial-data".
+        // Для остального кода (осциллограф, serialManager) он выглядит
+        // точно так же, как старый браузерный порт.
+        const serial = new TauriSerialPort();
         const parser = new ModbusParser();
 
         // Связываем кнопку Стоп/Пуск осциллографа с глобальным состоянием опроса

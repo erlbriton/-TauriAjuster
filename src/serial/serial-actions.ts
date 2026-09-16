@@ -175,8 +175,16 @@ export function updateComInterfaceName(serial: ISerialPort, comSelect: HTMLSelec
     // Через интерфейс: работает и для WebSerial, и для Tauri-адаптера.
     const portInfo = serial.getPortInfo();
     const chipName = identifyUsbChip(portInfo);
-    comSelect.innerHTML = `<option value="active">${chipName}</option>`;
+    
+    // ВАЖНО: НЕ уничтожаем список портов (не трогаем comSelect.innerHTML).
+    // В нативной версии Tauri список портов должен оставаться доступным
+    // для повторного выбора другого устройства без перезагрузки приложения.
+    // Имя порта уже отображается в самом <select> как выбранное значение
+    // (например, "/dev/ttyUSB0" или "COM3"), поэтому дополнительная подпись не нужна.
+    
+    // Меняем только визуальный стиль, чтобы показать, что порт подключён
     comSelect.className = 'select-blue';
+    
     return chipName;
 }
 export async function executeDeviceIdentification(serial: ISerialPort, comSelect: HTMLSelectElement | null, stateObj: AppState, baudSelect: HTMLSelectElement | null = null): Promise<void> {

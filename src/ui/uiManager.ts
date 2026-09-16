@@ -158,6 +158,65 @@ export function initUI(deps: UiManagerDeps): void {
         comSelect.innerHTML = '<option>Ошибка сканирования</option>';
       }
     });
+
+    // --- АВТОПОДКЛЮЧЕНИЕ ПРИ ВЫБОРЕ ПОРТА ---
+    // Требование: выбор порта из списка сразу открывает порт,
+    // посылает команду чтения ID и записывает результат в баннер.
+    // Никаких дополнительных кнопок пользователю нажимать не нужно.
+    comSelect.addEventListener('change', async () => {
+      const portName = comSelect.value;
+
+      // Пустое значение (служебная строка "Выберите порт") — ничего не делаем
+      if (!portName) return;
+
+      // Защита от двойного срабатывания: если идентификация уже идёт,
+      // не запускаем вторую параллельно
+      if (appState.isIdentifying) return;
+
+      try {
+        // Если порт уже открыт (например, выбрали другое устройство) —
+        // сначала освобождаем старый порт, иначе новый не открыть
+        if (serial.isConnected) {
+          serial.release();
+        }
+
+        // Сообщаем нативной реализации, какой порт открывать.
+        // Метод необязательный (есть только у TauriSerialPort),
+        // поэтому проверяем его наличие перед вызовом.
+        if (typeof serial.setPortPath === 'function') {
+          serial.setPortPath(portName);
+        }
+
+        // executeDeviceIdentification делает всё необходимое одной связкой:
+        // 1) открывает порт (serial.connect),
+        // 2) шлёт команду 0x11 (чтение ID),
+        // 3) ждёт ответ устройства,
+        // 4) записывает расшифрованный ID в баннер.
+        await executeDeviceIdentification(serial, comSelect, appState, baudSelect);
+
+        // Подключаем осциллограф к порту, чтобы он начал получать данные.
+        // Без этого осциллограф остался бы в состоянии "Ожидание связи".
+        const osc = window.osc;
+        if (osc && typeof osc.setSerialPort === 'function') {
+          osc.setSerialPort(serial);
+        }
+
+        // Восстанавливаем элементы интерфейса после подключения
+        // (баннер, статусы), как это делала кнопка "Подключить"
+        restoreConnection();
+
+        // Обновляем вид кнопки подключения на состояние "подключено"
+        updateIdButtonState(serial.isConnected);
+      } catch (err: unknown) {
+        // Отмена выбора порта — штатная ситуация, молча выходим
+        if (err instanceof PortCancelledError) {
+          return;
+        }
+        const msg = err instanceof Error ? err.message : String(err);
+        showIdModal('Ошибка: ' + msg);
+      }
+    });
+    // ---------------------------------------
   }
   // ---------------------------------------------------------
 

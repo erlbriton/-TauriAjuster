@@ -8,9 +8,18 @@
 // SystemTime, UNIX_EPOCH — получение времени последнего изменения файла.
 use serde::Serialize;
 use std::fs;
+// Read и Write — трейты для чтения/записи байтов в порт (как read()/write() в C)
+use std::io::{Read, Write};
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
-// Используем прямую библиотеку serialport для получения списка портов
+// AtomicBool и Ordering — потокобезопасный флаг «читать/не читать»
+use std::sync::atomic::{AtomicBool, Ordering};
+// Arc — счётчик ссылок для передачи флага в поток; Mutex — защита общего порта
+use std::sync::{Arc, Mutex};
+// Duration — таймаут чтения порта
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+// Emitter — трейт, дающий метод app.emit() для отправки событий во фронтенд
+use tauri::Emitter;
+// Используем прямую библиотеку serialport для получения списка портов и их открытия
 use serialport::available_ports;
 
 #[tauri::command]
@@ -130,6 +139,143 @@ fn list_serial_ports() -> Result<Vec<String>, String> {
     Ok(port_names)
 }
 
+//// Состояние приложения, общее для всех команд.
+/// Аналог глобальной структуры в C: зарегистрировано через .manage(),
+/// доступно в командах через параметр tauri::State.
+pub struct SerialState {
+    /// Текущий открытый порт.
+    /// Mutex — потому что команды выполняются в разных потоках Tauri;
+    /// Option — потому что порт может быть закрыт (None) или открыт (Some).
+    pub port: Mutex<Option<Box<dyn serialport::SerialPort>>>,
+    /// Личный флаг остановки ТЕКУЩЕГО читающего потока (true — должен завершиться).
+    /// Каждое открытие порта создаёт НОВЫЙ флаг, поэтому старый поток
+    /// никогда не реагирует на флаги нового потока и не "воскресает".
+    pub reader_stop: Mutex<Option<Arc<AtomicBool>>>,
+}
+
+/// Команда: открыть последовательный порт и запустить фоновый поток чтения.
+/// Поток чтения сам толкает принятые байты во фронтенд событием "serial-data"
+/// (push-модель): фронтенд ничего не опрашивает, данные приходят сами.
+#[tauri::command]
+fn open_serial_port(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, SerialState>,
+    path: String,
+    baud_rate: u32,
+) -> Result<(), String> {
+    // 1. Останавливаем ПРЕДЫДУЩИЙ читающий поток (если был): забираем его
+    //    личный флаг остановки и поднимаем его. Поток завершится сам
+    //    максимум через 100 мс (таймаут чтения). Личный флаг гарантирует,
+    //    что старый поток не будет "воскрешён" новым открытием.
+    {
+        let mut stop_guard = state.reader_stop.lock().map_err(|e| e.to_string())?;
+        if let Some(old_stop) = stop_guard.take() {
+            old_stop.store(true, Ordering::Relaxed);
+        }
+    }
+
+    // 2. Закрываем старый порт, если был открыт: drop дескриптора
+    //    физически освобождает устройство
+    {
+        let mut guard = state.port.lock().map_err(|e| e.to_string())?;
+        *guard = None;
+    }
+
+    // 3. Открываем порт с таймаутом чтения 100 мс.
+    //    Таймаут обязателен: без него read() блокирует поток навсегда,
+    //    и поток не сможет заметить флаг остановки.
+    let port = serialport::new(&path, baud_rate)
+        .timeout(Duration::from_millis(100))
+        .open()
+        .map_err(|e| format!("Не удалось открыть порт {}: {}", path, e))?;
+
+    // 4. Клонируем дескриптор порта (анлог dup() в C):
+    //    оригинал останется в состоянии для записи,
+    //    клон уйдёт в читающий поток.
+    let mut reader = port.try_clone().map_err(|e| e.to_string())?;
+
+    // 5. Кладём оригинал порта в общее состояние приложения
+    {
+        let mut guard = state.port.lock().map_err(|e| e.to_string())?;
+        *guard = Some(port);
+    }
+
+    // 6. Создаём ЛИЧНЫЙ флаг остановки для нового читающего потока
+    //    и кладём его в состояние, чтобы close_serial_port мог его поднять
+    let stop_flag = Arc::new(AtomicBool::new(false));
+    {
+        let mut stop_guard = state.reader_stop.lock().map_err(|e| e.to_string())?;
+        *stop_guard = Some(Arc::clone(&stop_flag));
+    }
+
+    // 7. Порождаем читающий поток. Он живёт, пока открыт порт.
+    std::thread::spawn(move || {
+        let mut buf = [0u8; 4096]; // приёмный буфер, как в драйвере UART
+        loop {
+            // Каждую итерацию проверяем СВОЙ личный флаг остановки
+            if stop_flag.load(Ordering::Relaxed) {
+                break;
+            }
+            match reader.read(&mut buf) {
+                // Принято n > 0 байт: отправляем их во фронтенд событием.
+                // Vec<u8> сериализуется в JSON-массив чисел, фронтенд
+                // соберёт из него Uint8Array.
+                Ok(n) if n > 0 => {
+                    let _ = app.emit("serial-data", buf[..n].to_vec());
+                }
+                // 0 байт — данных нет, просто пробуем снова
+                Ok(_) => continue,
+                // Таймаут чтения — штатная ситуация, не ошибка
+                Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => continue,
+                // Настоящая ошибка (кабель выдернули): сообщаем и выходим
+                Err(e) => {
+                    let _ = app.emit("serial-error", e.to_string());
+                    break;
+                }
+            }
+        }
+    });
+
+    Ok(())
+}
+
+/// Команда: записать байты в открытый порт.
+/// Вызывается фронтендом для отправки запроса устройству (например, пакета 0x11).
+#[tauri::command]
+fn write_serial_port(
+    state: tauri::State<'_, SerialState>,
+    data: Vec<u8>,
+) -> Result<(), String> {
+    // guard делаем изменяемым (mut), так как ниже мы попросим у него изменяемую ссылку на порт
+    let mut guard = state.port.lock().map_err(|e| e.to_string())?;
+    
+    // as_mut() возвращает Option<&mut Box<dyn SerialPort>>, то есть не-const указатель,
+    // через который можно вызывать методы, меняющие состояние порта (например, write_all)
+    match guard.as_mut() {
+        Some(port) => {
+            // write_all гарантирует отправку ВСЕХ байтов, а не части
+            port.write_all(&data).map_err(|e| e.to_string())
+        }
+        None => Err("Порт не открыт".to_string()),
+    }
+}
+
+/// Команда: закрыть порт и остановить читающий поток.
+#[tauri::command]
+fn close_serial_port(state: tauri::State<'_, SerialState>) -> Result<(), String> {
+    // Поднимаем личный флаг текущего читающего потока: он заметит его
+    // максимум через 100 мс (таймаут чтения) и корректно завершится
+    let mut stop_guard = state.reader_stop.lock().map_err(|e| e.to_string())?;
+    if let Some(stop) = stop_guard.take() {
+        stop.store(true, Ordering::Relaxed);
+    }
+    drop(stop_guard); // отпускаем мьютекс флагов перед взятием мьютекса порта
+    // Убираем порт из состояния: drop дескриптора физически закрывает порт
+    let mut guard = state.port.lock().map_err(|e| e.to_string())?;
+    *guard = None;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -140,11 +286,26 @@ pub fn run() {
         // Регистрируем плагин для работы с файловой системой (чтение/запись файлов).
         // Позволяет обойти ограничения браузера и работать с файлами напрямую.
         .plugin(tauri_plugin_fs::init())
+        // Регистрируем общее состояние serial-порта:
+        // теперь все команды видят один и тот же открытый порт
+        .manage(SerialState {
+            port: Mutex::new(None),
+            reader_stop: Mutex::new(None),
+        })
         // Регистрируем команды для фронтенда:
         // greet — тестовая команда,
         // scan_devices_folder — сканирование папки Devices,
-        // list_serial_ports — получение списка COM-портов.
-        .invoke_handler(tauri::generate_handler![greet, scan_devices_folder, list_serial_ports])
+        // list_serial_ports — получение списка COM-портов,
+        // open_serial_port / write_serial_port / close_serial_port —
+        // нативный обмен с устройством через последовательный порт.
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            scan_devices_folder,
+            list_serial_ports,
+            open_serial_port,
+            write_serial_port,
+            close_serial_port
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

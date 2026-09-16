@@ -14,5 +14,20 @@ interface Window {
     core: {
       invoke<T = unknown>(command: string, args?: Record<string, unknown>): Promise<T>;
     };
+    event: {
+      // listen подписывается на событие от Rust.
+      // Возвращает Promise с функцией отписки (unlisten).
+      // Payload события передаётся в колбэк как event.payload.
+      listen<T>(
+        eventName: string,
+        handler: (event: { payload: T }) => void
+      ): Promise<() => void>;
+      
+      // once — как listen, но срабатывает один раз
+      once<T>(
+        eventName: string,
+        handler: (event: { payload: T }) => void
+      ): Promise<() => void>;
+    };
   };
 }
