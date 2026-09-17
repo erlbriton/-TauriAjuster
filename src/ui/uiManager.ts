@@ -31,6 +31,8 @@ import { initHelpUI , showHelpWindow } from './help-ui.js';
 import { hasAnyDirty } from '../ini-manager/dirty-tracker.js';
 import { forcePickParentFolder } from '../ini-manager/db-folder.js';
 import { showConfirmDialog } from './confirm-dialog.js';
+import { initSerialPortUI } from './manager/serial-port.js';
+import { initDeviceManagementUI } from './manager/device-management.js';
 
 /** Буфер данных канала (типизирован явно, без any) */
 export interface ChannelBuffer {
@@ -115,153 +117,13 @@ export function initUI(deps: UiManagerDeps): void {
   const menuOpenFile = document.getElementById('menuOpenFile') as HTMLElement | null;
   const menuOpenFolder = document.getElementById('menuOpenFolder') as HTMLElement | null;
 
-  // --- Логика динамического обновления списка COM-портов ---
-  // Переменная для хранения ID интервала опроса портов.
-  // Нужна, чтобы blur-обработчик мог остановить опрос при закрытии дропдауна.
-  let comPortsPollInterval: number | null = null;
-
-  if (comSelect) {
-    // Функция обновления списка портов: опрашивает Rust и перерисовывает дропдаун,
-    // сохраняя текущий выбор пользователя.
-    const updatePortsList = async (): Promise<void> => {
-      try {
-        console.log('[UI] Запрос списка портов у Rust...');
-        // Вызываем команду Rust для получения списка доступных портов
-        // Используем глобальный объект __TAURI__, так как withGlobalTauri = true
-        const ports = await window.__TAURI__.core.invoke<string[]>('list_serial_ports');
-        console.log('[UI] Получен список портов:', ports);
-
-        // Сохраняем текущее выбранное значение, чтобы не сбрасывать его при обновлении
-        const currentSelection = comSelect.value;
-
-        // Очищаем текущий список опций
-        comSelect.innerHTML = '';
-
-        // Добавляем пустую опцию по умолчанию
-        const defaultOption = document.createElement('option');
-        defaultOption.text = 'Выберите порт';
-        defaultOption.value = '';
-        defaultOption.disabled = true;
-        defaultOption.selected = true;
-        comSelect.add(defaultOption);
-
-        // Заполняем список полученными портами
-        if (ports.length === 0) {
-          const noPortsOption = document.createElement('option');
-          noPortsOption.text = 'Порты не найдены';
-          noPortsOption.disabled = true;
-          comSelect.add(noPortsOption);
-        } else {
-          for (const port of ports) {
-            const option = document.createElement('option');
-            option.value = port;
-            option.text = port;
-            comSelect.add(option);
-
-            // Если ранее был выбран этот порт, восстанавливаем выбор
-            if (port === currentSelection) {
-              option.selected = true;
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Ошибка получения списка портов:', error);
-        // В случае ошибки можно показать сообщение пользователю или оставить список пустым
-        comSelect.innerHTML = '<option>Ошибка сканирования</option>';
-      }
-    };
-
-    // Обработчик события фокуса (открытие дропдауна):
-    // сразу обновляем список и запускаем периодический опрос каждые 500 мс,
-    // чтобы пользователь видел актуальный список, пока выбирает порт.
-    comSelect.addEventListener('focus', async () => {
-      console.log('[UI] Дропдаун COM открыт (focus)');
-      // Сразу обновляем список
-      await updatePortsList();
-      
-      // Запускаем периодический опрос каждые 500 мс,
-      // пока дропдаун открыт. Это позволяет увидеть новые порты,
-      // если USB-кабель был подключён уже после открытия списка.
-      if (comPortsPollInterval === null) {
-        comPortsPollInterval = window.setInterval(updatePortsList, 500);
-        console.log('[UI] Запущен опрос портов (интервал 500 мс)');
-      }
-    });
-
-    // Обработчик события blur (закрытие дропдауна):
-    // останавливаем опрос, чтобы не расходовать CPU в фоновом режиме.
-    comSelect.addEventListener('blur', () => {
-      console.log('[UI] Дропдаун COM закрыт (blur)');
-      if (comPortsPollInterval !== null) {
-        window.clearInterval(comPortsPollInterval);
-        comPortsPollInterval = null;
-        console.log('[UI] Опрос портов остановлен');
-      }
-    });
-
-    // --- АВТОПОДКЛЮЧЕНИЕ ПРИ ВЫБОРЕ ПОРТА ---
-    // Требование: выбор порта из списка сразу открывает порт,
-    // посылает команду чтения ID и записывает результат в баннер.
-    // Никаких дополнительных кнопок пользователю нажимать не нужно.
-    comSelect.addEventListener('change', async () => {
-      const portName = comSelect.value;
-
-      // Пустое значение (служебная строка "Выберите порт") — ничего не делаем
-      if (!portName) return;
-
-      // Защита от двойного срабатывания: если идентификация уже идёт,
-      // не запускаем вторую параллельно
-      if (appState.isIdentifying) return;
-
-      try {
-        // Если порт уже открыт (например, выбрали другое устройство) —
-        // сначала освобождаем старый порт, иначе новый не открыть
-        if (serial.isConnected) {
-          serial.release();
-        }
-
-        // Сообщаем нативной реализации, какой порт открывать.
-        // Метод необязательный (есть только у TauriSerialPort),
-        // поэтому проверяем его наличие перед вызовом.
-        if (typeof serial.setPortPath === 'function') {
-          serial.setPortPath(portName);
-        }
-
-        // executeDeviceConnection только открывает порт и инициализирует обмен,
-        // но НЕ посылает запрос ID. Для запроса ID пользователь нажимает
-        // кнопку "ID" отдельно.
-        await executeDeviceConnection(serial, comSelect, baudSelect);
-
-        // Подключаем осциллограф к порту, чтобы он начал получать данные.
-        // Без этого осциллограф остался бы в состоянии "Ожидание связи".
-        const osc = window.osc;
-        if (osc && typeof osc.setSerialPort === 'function') {
-          osc.setSerialPort(serial);
-        }
-
-        // Восстанавливаем элементы интерфейса после подключения
-        // (баннер, статусы), как это делала кнопка "Подключить"
-        restoreConnection();
-
-        // Обновляем вид кнопки подключения на состояние "подключено"
-        updateIdButtonState(serial.isConnected);
-      } catch (err: unknown) {
-        // Отмена выбора порта — штатная ситуация, молча выходим
-        if (err instanceof PortCancelledError) {
-          return;
-        }
-        const msg = err instanceof Error ? err.message : String(err);
-        showIdModal('Ошибка: ' + msg);
-      }
-    });
-    // ---------------------------------------
-  }
-  // ---------------------------------------------------------
-
+    // --- Инициализация модуля управления COM-портами ---
+  // Делегируем логику работы с портами, кнопкой ID и обработкой отключения
+  // в отдельный модуль serial-port.ts для лучшей структуры кода.
+  
+  // Определяем restoreConnection здесь, чтобы передать её в модуль до использования.
   const restoreConnection = (): void => {
     if (!serial.isConnected) return;
-    // БЫЛО: const osc = (window as any).osc;
-    // СТАЛО:
     const osc = window.osc;
     if (osc && typeof osc.setConnectionStatus === 'function') {
       osc.setConnectionStatus(true);
@@ -276,7 +138,18 @@ export function initUI(deps: UiManagerDeps): void {
       appState.isPolling = true;
       readLoop(serial, parser, view, buffers, appState);
     }
-  };
+  }; // <--- ДОБАВИТЬ ЭТУ ЗАКРЫВАЮЩУЮ СКОБКУ И ТОЧКУ С ЗАПЯТОЙ
+
+  initSerialPortUI({
+    serial,
+    appState,
+    comSelect,
+    baudSelect,
+    idBtn,
+    executeDeviceConnection,
+    executeDeviceIdentification,
+    restoreConnection
+  });
 
   if (folderPicker && typeof setupFolderHandling === 'function') setupFolderHandling(folderPicker);
 
@@ -286,8 +159,8 @@ export function initUI(deps: UiManagerDeps): void {
     (view as unknown as Record<string, unknown>).__loadIniContentWrapped = true;
     view.loadIniContent = async (iniContent: string) => {
       try {
-                        if (typeof iniContent === 'string' && iniContent.trim().length > 0) {
-                    appState.currentIniContent = iniContent;
+        if (typeof iniContent === 'string' && iniContent.trim().length > 0) {
+          appState.currentIniContent = iniContent;
           const coreParser = new CoreIniParser();
           const parseResult = coreParser.parse(iniContent);
           appState.currentIniConfig = new IniConfig(parseResult);
@@ -299,395 +172,27 @@ export function initUI(deps: UiManagerDeps): void {
       return originalLoadIniContent(iniContent);
     };
   }
-
-    if (connectBtn) {
-    connectBtn.addEventListener("click", async () => {
-      // Кнопка "Подключить":
-      //  - если порт уже открыт (кнопкой ID или предыдущим "Подключить") —
-      //    просто читаем ID из баннера, не посылая 0x11 повторно;
-      //  - если порт закрыт — открываем его и читаем ID через
-      //    executeDeviceIdentification (она сама откроет, отправит 0x11,
-      //    запишет в баннер и корректно обработает отмену выбора порта).
-      // Этап поиска "родного" INI — следующий шаг.
-
-      let idText: string;
-
-      if (serial.isConnected) {
-        const banner = document.querySelector('.id-banner span');
-        idText = (banner?.textContent ?? '').trim();
-      } else {
-        try {
-          await executeDeviceIdentification(serial, comSelect, appState, baudSelect);
-        } catch (err: unknown) {
-          // Отмена выбора порта уже обработана внутри executeDeviceIdentification
-          // (через PortCancelledError), но для надёжности перехватываем и здесь.
-          if (err instanceof PortCancelledError) {
-            return;
-          }
-          const msg = err instanceof Error ? err.message : String(err);
-          showIdModal("Ошибка: " + msg);
-          return;
-        }
-
-        const banner = document.querySelector('.id-banner span');
-        idText = (banner?.textContent ?? '').trim();
-      }
-
-      // Поиск "родного" INI среди загруженных файлов.
-      // Критерий совпадения: серийный номер + тип устройства (без версии).
-      if (!idText) {
-        console.log('[Connect] Строка ID пустая — поиск пропущен.');
-        return;
-      }
-
-      const target = parseDeviceIdString(idText);
-      let matchedId: string | null = null;
-
-      let fwUpdateCandidate: string | null = null;
-      for (const device of getAllDevices()) {
-        const candidate = device.iniConfig?.device?.id;
-        if (!candidate) continue;
-        const parsed = parseDeviceIdString(candidate);
-        if (parsed.serial === target.serial && parsed.deviceType === target.deviceType && parsed.version === target.version) {
-          matchedId = device.id;
-          break;
-        }
-        // Запоминаем кандидата с совпадающим serial+deviceType, но разной version
-        if (
-          parsed.serial === target.serial &&
-          parsed.deviceType === target.deviceType &&
-          parsed.version !== target.version
-        ) {
-          fwUpdateCandidate = device.id;
-        }
-      }
-
-      if (!matchedId && fwUpdateCandidate) {
-        // Третий случай: номер и модель совпадают, но версия ПО отличается
-        const fullInfo: FwUpdateInfo = parseDeviceIdFull(idText);
-        
-        // Получаем имя файла старого устройства
-        const oldDevice = getAllDevices().find((d) => d.id === fwUpdateCandidate);
-        if (oldDevice) {
-          const oldDev = oldDevice.iniConfig.device;
-          const oldDevId = oldDev ? oldDev.id : '';
-          const oldLoc = oldDev?.location ?? '';
-          const store = getFileStore();
-          const entry = store.get(`${oldLoc}::${oldDevId}`);
-          if (entry?.file) {
-            fullInfo.oldFileName = entry.file.name;
-          }
-        }
-        
-        console.log(`[Connect] Найдено устройство с другой версией ПО: ${fwUpdateCandidate}, oldFileName=${fullInfo.oldFileName}`);
-        showFwUpdateModal(fullInfo);
-        return;
-      }
-
-      if (matchedId !== null) {
-        // Программный клик по узлу дерева:
-        // - подсветка .is-selected переедет на него;
-        // - setCurrentIniConfig / populateDeviceForm / renderModbusTable
-        //   будут вызваны в обработчике клика самого <li>;
-        // - osциллограф получит новое активное устройство через app:ini-file-loaded.
-        const leaf = document.querySelector<HTMLLIElement>(
-          `.tree-id-item.is-leaf[data-device-id="${CSS.escape(matchedId)}"]`,
-        );
-        if (leaf) {
-          // Раскрываем родительскую группу <details>, если она свёрнута
-          const details = leaf.closest('details.tree-location');
-          if (details) {
-            (details as HTMLDetailsElement).open = true;
-          }
-          leaf.click();
-          console.log(`[Connect] Родной INI найден и выбран: ${matchedId}`);
-        } else {
-          console.warn(`[Connect] Родной INI найден (${matchedId}), но узел дерева не отрендерен.`);
-        }
-      } else {
-        // Родной INI не найден — открываем окно "Новое устройство".
-        console.log('[Connect] Родной INI не найден среди загруженных файлов.');
-        showNewDeviceModal(idText);
-      }
-    });
-  }
-
-  if (serial && typeof serial.onDisconnect === 'function') {
-    serial.onDisconnect(async () => {
-      const osc = window.osc;
-      if (isManualDisconnect) {
-        console.log('[UI] Порт отключён вручную пользователем (без предупреждения осциллографа).');
-        // Останавливаем маркеры, но НЕ показываем модальное окно (пустая строка = suppress modal)
-        if (osc && typeof osc.setConnectionStatus === 'function') {
-          osc.setConnectionStatus(false, '');
-        }
-      } else {
-        console.log('[UI] Обрыв связи обнаружен (физический обрыв USB).');
-        // Останавливаем маркеры И показываем предупреждение
-        if (osc && typeof osc.setConnectionStatus === 'function') {
-          osc.setConnectionStatus(false, 'Связь с устройством потеряна.');
-        }
-      }
-      // В обоих случаях: обновляем UI (баннер, кнопка, состояние опроса)
-      appState.isPolling = false;
-      updateIdBanner('');
-      
-      // Сбрасываем выбранный порт в дропдауне и обновляем список портов,
-      // чтобы пользователь при следующем клике видел актуальный список.
-      if (comSelect) {
-        // Сбрасываем выбор на первую опцию "Выберите порт"
-        comSelect.value = '';
-        
-        // Обновляем список портов через Rust (аналогично обработчику focus)
-        try {
-          const ports = await window.__TAURI__.core.invoke<string[]>('list_serial_ports');
-          
-          // Сохраняем текущее значение (пустая строка)
-          const currentSelection = comSelect.value;
-          
-          // Очищаем список
-          comSelect.innerHTML = '';
-          
-          // Добавляем пустую опцию по умолчанию
-          const defaultOption = document.createElement('option');
-          defaultOption.text = 'Выберите порт';
-          defaultOption.value = '';
-          defaultOption.disabled = true;
-          defaultOption.selected = true;
-          comSelect.add(defaultOption);
-          
-          // Заполняем список полученными портами
-          if (ports.length === 0) {
-            const noPortsOption = document.createElement('option');
-            noPortsOption.text = 'Порты не найдены';
-            noPortsOption.disabled = true;
-            comSelect.add(noPortsOption);
-          } else {
-            for (const port of ports) {
-              const option = document.createElement('option');
-              option.value = port;
-              option.text = port;
-              comSelect.add(option);
-            }
-          }
-        } catch (error) {
-          console.error('[UI] Ошибка обновления списка портов при обрыве связи:', error);
-        }
-      }
-      updateIdButtonState(false);
-    });
-  }
-
-  // Синхронизирует надпись и тултип кнопки ID с текущим состоянием порта.
-  // Кнопка ID всегда остаётся "ID", независимо от состояния подключения.
-  // Функция оставлена для совместимости (вызывается в нескольких местах),
-  // но больше не меняет текст и title кнопки.
-  const updateIdButtonState = (_connected: boolean): void => {
-    // Ничего не делаем: кнопка всегда "ID"
-  };
-
-  // Начальное состояние (до первого взаимодействия).
-  updateIdButtonState(false);
-
-  // Отключение порта через release().
-  // release() автоматически вызовет onDisconnect callback, который сбросит
-  // кнопку ID в состояние "ID" / "Подключить com порт" через updateIdButtonState(false).
-  const disconnectPort = async (): Promise<void> => {
-    try {
-      isManualDisconnect = true;
-      serial.release();
-      console.log('[UI] Порт отключён вручную через serial.release().');
-    } catch (err) {
-      console.error('[UI] Ошибка при отключении порта:', err);
-      showIdModal(`Ошибка отключения: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      isManualDisconnect = false;
-    }
-  };
-
-  if (idBtn) {
-    idBtn.addEventListener("click", async () => {
-      // Кнопка ID только шлёт запрос идентификации устройства.
-      // Если порт не подключён — сначала открываем его, потом шлём ID.
-      // Если порт уже подключён — просто шлём ID повторно.
-      
-      if (!serial.isConnected) {
-        // Порт не подключён: открываем через executeDeviceConnection
-        try {
-          await executeDeviceConnection(serial, comSelect, baudSelect);
-          
-          const osc = window.osc;
-          if (osc && typeof osc.setSerialPort === 'function') {
-            osc.setSerialPort(serial);
-          }
-          
-          restoreConnection();
-        } catch (err: unknown) {
-          if (err instanceof PortCancelledError) return;
-          const msg = err instanceof Error ? err.message : String(err);
-          showIdModal('Ошибка подключения: ' + msg);
-          return;
-        }
-      }
-      
-      // Теперь порт подключён — шлём запрос ID
-      await executeDeviceIdentification(serial, comSelect, appState, baudSelect);
-    });
-  }
-
-  // Обновление таблицы (FC03). Используется и кнопкой "Обновить",
-  // и автообновлением после загрузки INI-файла.
-  const performRefresh = async (notifyIfDisconnected: boolean): Promise<void> => {
-    if (!serial?.isConnected) {
-      if (notifyIfDisconnected) showIdModal("Устройство не подключено!");
-      return;
-    }
-    if (appState.isRefreshing) return;
-    appState.isRefreshing = true;
-    if (refreshBtn) refreshBtn.disabled = true;
-
-    const wasPolling = appState.isPolling;
-
-    try {
-      // Выполняем обновление таблицы и проверяем результат
-      const success = await updateDeviceRegisters(serial, appState.slaveAddress, appState);
-
-      if (success) {
-        // Успешно: восстанавливаем опрос, если он был активен до обновления
-        if (wasPolling) {
-          console.log('[UI] Восстанавливаем опрос после обновления');
-          appState.isLoopRunning = false;
-          appState.isPolling = true;
-          readLoop(serial, parser, view, buffers, appState);
-        }
-      } else {
-        // Неудача (контроллер не отвечает или ошибки связи):
-        // показываем компактное окно ошибки независимо от осциллографа
-        console.warn('[UI] updateDeviceRegisters вернул false — связь не удалась');
-        showCompactError('Контроллер не отвечает. Проверьте адрес и подключение.');
-      }
-    } catch (err) {
-      console.error("Ошибка при обновлении:", err);
-      // На случай исключительной ситуации тоже показываем окно
-      showCompactError('Ошибка при обновлении таблицы. Проверьте связь.');
-    } finally {
-      appState.isRefreshing = false;
-      if (refreshBtn) refreshBtn.disabled = false;
-    }
-  };
-
-  if (refreshBtn) {
-    refreshBtn.addEventListener("click", async () => {
-      await performRefresh(true);
-    });
-  }
-
-  // ==========================================================================
-  // Первая кнопка шапки: список устройств (основная кнопка + выпадающий список)
-  // ==========================================================================
+ 
   const deviceListActionBtn = document.getElementById('deviceListActionBtn') as HTMLButtonElement | null;
   const deviceListArrowBtn = document.getElementById('deviceListArrowBtn') as HTMLButtonElement | null;
   const deviceListDropdown = document.getElementById('deviceListDropdown') as HTMLElement | null;
-
-  // Текущий режим кнопки (по умолчанию — "Обновить")
-  let deviceListMode = 'refresh';
-
-  // Соответствие режимов кнопки — режимам группировки дерева
-  const treeModeByButtonMode: Record<string, TreeGroupMode> = {
-    refresh: 'location',
-    serials: 'serial',
-    place: 'location',
-    mechType: 'mechType',
-    serviceDate: 'serviceDate',
-    deviceType: 'deviceType',
-  };
-
-  const deviceListMenu: Array<{ id: string; mode: string }> = [
-    { id: 'menuDeviceRefresh', mode: 'refresh' },
-    { id: 'menuDeviceSerials', mode: 'serials' },
-    { id: 'menuDevicePlace', mode: 'place' },
-    { id: 'menuDeviceMechType', mode: 'mechType' },
-    { id: 'menuDeviceServiceDate', mode: 'serviceDate' },
-    { id: 'menuDeviceType', mode: 'deviceType' },
-  ];
-
-  // Пометка выбранного пункта маркером "•" (как на скриншоте), без правки CSS
-  const markSelectedDeviceItem = (): void => {
-    for (const item of deviceListMenu) {
-      const el = document.getElementById(item.id);
-      if (!el) continue;
-      const label = el.dataset.label ?? (el.textContent || '').replace(/^•\s*/, '');
-      el.dataset.label = label;
-      el.textContent = item.mode === deviceListMode ? '• ' + label : label;
-    }
-  };
-
-  if (deviceListArrowBtn && deviceListDropdown) {
-    // Раскрытие/закрытие списка по клику на треугольничек
-    deviceListArrowBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const isOpen = deviceListDropdown.style.display === 'block';
-      deviceListDropdown.style.display = isOpen ? 'none' : 'block';
-      if (!isOpen) markSelectedDeviceItem();
-    });
-
-    // Закрытие по клику вне списка
-    document.addEventListener('click', (e) => {
-      if (!deviceListDropdown.contains(e.target as Node) && e.target !== deviceListArrowBtn) {
-        deviceListDropdown.style.display = 'none';
-      }
-    });
-
-    // Закрытие по Escape
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') deviceListDropdown.style.display = 'none';
-    });
-
-    // Выбор пункта меню: запоминаем режим и сразу перестраиваем дерево
-    for (const item of deviceListMenu) {
-      const el = document.getElementById(item.id);
-      if (el) {
-        el.addEventListener('click', () => {
-          deviceListMode = item.mode;
-          deviceListDropdown.style.display = 'none';
-          markSelectedDeviceItem();
-          setTreeGroupMode(treeModeByButtonMode[item.mode] ?? 'location');
-          renderDeviceTree();
-          console.log(`[UI] Выбрана функция кнопки списка устройств: ${item.mode}`);
-        });
-      }
-    }
-  }
-
-  // Основная кнопка: выполняет текущую выбранную функцию
-  if (deviceListActionBtn) {
-    deviceListActionBtn.addEventListener('click', async () => {
-      // Следующим этапом здесь появятся функции всех пунктов меню.
-      // Пока реализована только функция по умолчанию — "Обновить список устройств".
-      if (deviceListMode === 'refresh') {
-        const results = await reloadIniFilesFromDisk();
-        if (results.updated === 0 && results.removed === 0 && results.errors.length === 0) {
-          showCompactError('Изменений в INI-файлах не обнаружено.');
-        } else {
-          const parts: string[] = [];
-          if (results.updated > 0) parts.push(`Изменений в файлах: ${results.updated}`);
-          if (results.removed > 0) parts.push(`удалено из списка: ${results.removed}`);
-          showCompactError(`Содержимое  ini файлов обновлено. ${parts.join(', ')}.`);
-        }
-        if (results.errors.length > 0) {
-          console.warn('[UI] reloadIniFilesFromDisk — ошибки:', results.errors);
-        }
-      } else {
-        // Режимы группировки: основная кнопка перестраивает дерево
-        setTreeGroupMode(treeModeByButtonMode[deviceListMode] ?? 'location');
-        renderDeviceTree();
-      }
-    });
-  }
-
-  // Автообновление после загрузки/смены INI-файла: тихо, только если порт открыт
-  window.addEventListener('app:ini-file-loaded', () => {
-    void performRefresh(false);
+  
+  initDeviceManagementUI({
+    serial,
+    appState,
+    parser,
+    view,
+    buffers,
+    connectBtn,
+    refreshBtn,
+    deviceListActionBtn,
+    deviceListArrowBtn,
+    deviceListDropdown,
+    comSelect,
+    baudSelect,
+    executeDeviceIdentification,
+    readLoop,
+    updateDeviceRegisters
   });
 
   // ---------------------------------------------------------------------------
