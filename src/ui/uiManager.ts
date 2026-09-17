@@ -33,7 +33,7 @@ import { forcePickParentFolder } from '../ini-manager/db-folder.js';
 import { showConfirmDialog } from './confirm-dialog.js';
 import { initSerialPortUI } from './manager/serial-port.js';
 import { initDeviceManagementUI } from './manager/device-management.js';
-
+import { initOscilloscopeUI } from './manager/oscilloscope-ui.js';
 /** Буфер данных канала (типизирован явно, без any) */
 export interface ChannelBuffer {
   push(v: number): void;
