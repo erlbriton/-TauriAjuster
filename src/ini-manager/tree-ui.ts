@@ -20,6 +20,7 @@ import { showConfirmDialog } from '../ui/confirm-dialog.js';
 import { saveIniChanges } from './save-ini.js';
 import type { AppState } from '../core/app-state.js';
 import { currentIniConfig } from './tree-core.js';
+import { getFileStore } from './file-loader.js';
 
 // ============================================================================
 // Контекстное меню дерева устройств
@@ -215,6 +216,40 @@ if (ctxOpenFileEl) {
             window.dispatchEvent(new CustomEvent('app:edit-device-requested', {
                 detail: { id: String(contextTarget.id) },
             }));
+        }
+        contextTarget = null;
+        hideTreeContextMenu();
+    });
+}
+
+// Пункт "Открыть папку с файлом": находим путь в fileStore и вызываем Rust-команду,
+// которая откроет папку в файловом менеджере (с выделением файла на Windows/macOS).
+const ctxOpenFolderEl = document.getElementById('ctxOpenFolder');
+if (ctxOpenFolderEl) {
+    ctxOpenFolderEl.addEventListener('click', async () => {
+        if (contextTarget) {
+            // Ищем запись в fileStore по id устройства
+            const fileStore = getFileStore();
+            let filePath: string | undefined;
+            for (const entry of fileStore.values()) {
+                if (entry.id === String(contextTarget.id)) {
+                    filePath = entry.path;
+                    break;
+                }
+            }
+            
+            if (filePath) {
+                try {
+                    await window.__TAURI__.core.invoke<void>('open_file_location', {
+                        path: filePath
+                    });
+                } catch (err) {
+                    console.error('[tree-ui] Ошибка открытия папки:', err);
+                    // showIdModal или другой способ уведомления об ошибке
+                }
+            } else {
+                console.warn('[tree-ui] Путь к файлу не найден в fileStore для устройства:', contextTarget.id);
+            }
         }
         contextTarget = null;
         hideTreeContextMenu();

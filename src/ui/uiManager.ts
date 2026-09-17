@@ -51,6 +51,11 @@ export interface UiManagerDeps {
   setupFileHandling: (picker: HTMLInputElement, state: AppState) => void;
   setupFolderHandling?: (picker: HTMLInputElement) => void;
   updateComInterfaceName: (serial: ISerialPort, select: HTMLSelectElement | null) => string;
+  executeDeviceConnection: (
+    serial: ISerialPort,
+    select: HTMLSelectElement | null,
+    baudSelect?: HTMLSelectElement | null
+  ) => Promise<void>;
   executeDeviceIdentification: (
     serial: ISerialPort,
     select: HTMLSelectElement | null,
@@ -88,7 +93,7 @@ export function initUI(deps: UiManagerDeps): void {
   const {
     serial, appState, parser, view, buffers,
     setupFileHandling, setupFolderHandling, updateComInterfaceName,
-    executeDeviceIdentification, readLoop, showIdModal, updateDeviceRegisters
+    executeDeviceConnection, executeDeviceIdentification, readLoop, showIdModal, updateDeviceRegisters
   } = deps;
   let isManualDisconnect = false;
   const filePicker = document.getElementById('filePicker') as HTMLInputElement | null;
@@ -111,13 +116,20 @@ export function initUI(deps: UiManagerDeps): void {
   const menuOpenFolder = document.getElementById('menuOpenFolder') as HTMLElement | null;
 
   // --- Логика динамического обновления списка COM-портов ---
+  // Переменная для хранения ID интервала опроса портов.
+  // Нужна, чтобы blur-обработчик мог остановить опрос при закрытии дропдауна.
+  let comPortsPollInterval: number | null = null;
+
   if (comSelect) {
-    // Добавляем обработчик события фокуса (клик по списку)
-    comSelect.addEventListener('focus', async () => {
+    // Функция обновления списка портов: опрашивает Rust и перерисовывает дропдаун,
+    // сохраняя текущий выбор пользователя.
+    const updatePortsList = async (): Promise<void> => {
       try {
+        console.log('[UI] Запрос списка портов у Rust...');
         // Вызываем команду Rust для получения списка доступных портов
         // Используем глобальный объект __TAURI__, так как withGlobalTauri = true
         const ports = await window.__TAURI__.core.invoke<string[]>('list_serial_ports');
+        console.log('[UI] Получен список портов:', ports);
 
         // Сохраняем текущее выбранное значение, чтобы не сбрасывать его при обновлении
         const currentSelection = comSelect.value;
@@ -157,6 +169,34 @@ export function initUI(deps: UiManagerDeps): void {
         // В случае ошибки можно показать сообщение пользователю или оставить список пустым
         comSelect.innerHTML = '<option>Ошибка сканирования</option>';
       }
+    };
+
+    // Обработчик события фокуса (открытие дропдауна):
+    // сразу обновляем список и запускаем периодический опрос каждые 500 мс,
+    // чтобы пользователь видел актуальный список, пока выбирает порт.
+    comSelect.addEventListener('focus', async () => {
+      console.log('[UI] Дропдаун COM открыт (focus)');
+      // Сразу обновляем список
+      await updatePortsList();
+      
+      // Запускаем периодический опрос каждые 500 мс,
+      // пока дропдаун открыт. Это позволяет увидеть новые порты,
+      // если USB-кабель был подключён уже после открытия списка.
+      if (comPortsPollInterval === null) {
+        comPortsPollInterval = window.setInterval(updatePortsList, 500);
+        console.log('[UI] Запущен опрос портов (интервал 500 мс)');
+      }
+    });
+
+    // Обработчик события blur (закрытие дропдауна):
+    // останавливаем опрос, чтобы не расходовать CPU в фоновом режиме.
+    comSelect.addEventListener('blur', () => {
+      console.log('[UI] Дропдаун COM закрыт (blur)');
+      if (comPortsPollInterval !== null) {
+        window.clearInterval(comPortsPollInterval);
+        comPortsPollInterval = null;
+        console.log('[UI] Опрос портов остановлен');
+      }
     });
 
     // --- АВТОПОДКЛЮЧЕНИЕ ПРИ ВЫБОРЕ ПОРТА ---
@@ -187,12 +227,10 @@ export function initUI(deps: UiManagerDeps): void {
           serial.setPortPath(portName);
         }
 
-        // executeDeviceIdentification делает всё необходимое одной связкой:
-        // 1) открывает порт (serial.connect),
-        // 2) шлёт команду 0x11 (чтение ID),
-        // 3) ждёт ответ устройства,
-        // 4) записывает расшифрованный ID в баннер.
-        await executeDeviceIdentification(serial, comSelect, appState, baudSelect);
+        // executeDeviceConnection только открывает порт и инициализирует обмен,
+        // но НЕ посылает запрос ID. Для запроса ID пользователь нажимает
+        // кнопку "ID" отдельно.
+        await executeDeviceConnection(serial, comSelect, baudSelect);
 
         // Подключаем осциллограф к порту, чтобы он начал получать данные.
         // Без этого осциллограф остался бы в состоянии "Ожидание связи".
@@ -375,7 +413,7 @@ export function initUI(deps: UiManagerDeps): void {
   }
 
   if (serial && typeof serial.onDisconnect === 'function') {
-    serial.onDisconnect(() => {
+    serial.onDisconnect(async () => {
       const osc = window.osc;
       if (isManualDisconnect) {
         console.log('[UI] Порт отключён вручную пользователем (без предупреждения осциллографа).');
@@ -393,22 +431,59 @@ export function initUI(deps: UiManagerDeps): void {
       // В обоих случаях: обновляем UI (баннер, кнопка, состояние опроса)
       appState.isPolling = false;
       updateIdBanner('');
+      
+      // Сбрасываем выбранный порт в дропдауне и обновляем список портов,
+      // чтобы пользователь при следующем клике видел актуальный список.
+      if (comSelect) {
+        // Сбрасываем выбор на первую опцию "Выберите порт"
+        comSelect.value = '';
+        
+        // Обновляем список портов через Rust (аналогично обработчику focus)
+        try {
+          const ports = await window.__TAURI__.core.invoke<string[]>('list_serial_ports');
+          
+          // Сохраняем текущее значение (пустая строка)
+          const currentSelection = comSelect.value;
+          
+          // Очищаем список
+          comSelect.innerHTML = '';
+          
+          // Добавляем пустую опцию по умолчанию
+          const defaultOption = document.createElement('option');
+          defaultOption.text = 'Выберите порт';
+          defaultOption.value = '';
+          defaultOption.disabled = true;
+          defaultOption.selected = true;
+          comSelect.add(defaultOption);
+          
+          // Заполняем список полученными портами
+          if (ports.length === 0) {
+            const noPortsOption = document.createElement('option');
+            noPortsOption.text = 'Порты не найдены';
+            noPortsOption.disabled = true;
+            comSelect.add(noPortsOption);
+          } else {
+            for (const port of ports) {
+              const option = document.createElement('option');
+              option.value = port;
+              option.text = port;
+              comSelect.add(option);
+            }
+          }
+        } catch (error) {
+          console.error('[UI] Ошибка обновления списка портов при обрыве связи:', error);
+        }
+      }
       updateIdButtonState(false);
     });
   }
 
   // Синхронизирует надпись и тултип кнопки ID с текущим состоянием порта.
-  // connected=true  → "Off" / "Отключить com порт"
-  // connected=false → "ID"  / "Подключить com порт"
-  const updateIdButtonState = (connected: boolean): void => {
-    if (!idBtn) return;
-    if (connected) {
-      idBtn.textContent = 'Off';
-      idBtn.title = 'Отключить com порт';
-    } else {
-      idBtn.textContent = 'ID';
-      idBtn.title = 'Подключить com порт';
-    }
+  // Кнопка ID всегда остаётся "ID", независимо от состояния подключения.
+  // Функция оставлена для совместимости (вызывается в нескольких местах),
+  // но больше не меняет текст и title кнопки.
+  const updateIdButtonState = (_connected: boolean): void => {
+    // Ничего не делаем: кнопка всегда "ID"
   };
 
   // Начальное состояние (до первого взаимодействия).
@@ -432,25 +507,31 @@ export function initUI(deps: UiManagerDeps): void {
 
   if (idBtn) {
     idBtn.addEventListener("click", async () => {
-      if (serial.isConnected) {
-        // Порт подключён — отключаем
-        await disconnectPort();
-        // После отключения (когда оно будет реализовано) обновим вид кнопки.
-        updateIdButtonState(serial.isConnected);
-        return;
+      // Кнопка ID только шлёт запрос идентификации устройства.
+      // Если порт не подключён — сначала открываем его, потом шлём ID.
+      // Если порт уже подключён — просто шлём ID повторно.
+      
+      if (!serial.isConnected) {
+        // Порт не подключён: открываем через executeDeviceConnection
+        try {
+          await executeDeviceConnection(serial, comSelect, baudSelect);
+          
+          const osc = window.osc;
+          if (osc && typeof osc.setSerialPort === 'function') {
+            osc.setSerialPort(serial);
+          }
+          
+          restoreConnection();
+        } catch (err: unknown) {
+          if (err instanceof PortCancelledError) return;
+          const msg = err instanceof Error ? err.message : String(err);
+          showIdModal('Ошибка подключения: ' + msg);
+          return;
+        }
       }
-      // Порт не подключён — подключаем через идентификацию
+      
+      // Теперь порт подключён — шлём запрос ID
       await executeDeviceIdentification(serial, comSelect, appState, baudSelect);
-
-      const osc = window.osc;
-      if (osc && typeof osc.setSerialPort === 'function') {
-        osc.setSerialPort(serial);
-      }
-
-      restoreConnection();
-
-      // После подключения обновляем вид кнопки на "Off" / "Отключить com порт"
-      updateIdButtonState(serial.isConnected);
     });
   }
 

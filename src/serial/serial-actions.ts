@@ -187,6 +187,38 @@ export function updateComInterfaceName(serial: ISerialPort, comSelect: HTMLSelec
     
     return chipName;
 }
+/**
+ * Открывает последовательный порт без запроса ID устройства.
+ * Используется при выборе порта из выпадающего списка:
+ * порт открывается, инициализируется обмен, но запрос ID не посылается.
+ * Для запроса ID пользователь нажимает кнопку "ID" отдельно.
+ */
+export async function executeDeviceConnection(
+    serial: ISerialPort,
+    comSelect: HTMLSelectElement | null,
+    baudSelect: HTMLSelectElement | null = null
+): Promise<void> {
+    try {
+        const baudRate = baudSelect ? parseInt(baudSelect.value, 10) || 115200 : 115200;
+        
+        // Если порт уже открыт — не открываем повторно
+        if (!serial.isConnected) {
+            await serial.connect(baudRate);
+            serialManager.init(serial);
+            updateComInterfaceName(serial, comSelect);
+            await new Promise((r) => setTimeout(r, 500));
+        }
+    } catch (error: unknown) {
+        // Пользователь закрыл окно выбора порта, не выбрав порт —
+        // штатная ситуация: молча выходим, без окна ошибки.
+        if (error instanceof Error && error.name === 'PortCancelledError') {
+            return;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        showIdModal("Ошибка: " + message);
+    }
+}
+
 export async function executeDeviceIdentification(serial: ISerialPort, comSelect: HTMLSelectElement | null, stateObj: AppState, baudSelect: HTMLSelectElement | null = null): Promise<void> {
     try {
         stateObj.isIdentifying = true;

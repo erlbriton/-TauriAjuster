@@ -18,6 +18,7 @@ import { autoLoadDevicesFolder } from './core/platform/tauri-autoloader.js';
 import { initDropZone } from './ini-manager/drop-loader.js';
 import {
     updateComInterfaceName,
+    executeDeviceConnection,
     executeDeviceIdentification,
     readLoop
 } from './serial/serial-actions.js';
@@ -90,6 +91,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             serial, appState, parser, view: osc, buffers,
             setupFileHandling,
             updateComInterfaceName,
+            executeDeviceConnection,
             executeDeviceIdentification,
             readLoop,
             showIdModal,

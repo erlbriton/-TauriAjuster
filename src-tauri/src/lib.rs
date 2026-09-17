@@ -124,17 +124,34 @@ fn scan_devices_folder() -> Result<Vec<IniFileInfo>, String> {
 
 /// Команда для фронтенда: возвращает список доступных последовательных портов (COM-портов).
 /// Использует библиотеку serialport для нативного сканирования системы.
+/// Фильтрует виртуальные порты (ttyS*) и оставляет только реальные USB/COM порты.
 #[tauri::command]
 fn list_serial_ports() -> Result<Vec<String>, String> {
-    // Получаем список портов через библиотеку serialport
-    let ports = available_ports()
-        .map_err(|e| format!("Ошибка сканирования портов: {}", e))?;
+    eprintln!("[RUST] list_serial_ports: вызов команды");
 
-    // Преобразуем структуру PortInfo в вектор строк (имена портов)
+    // Получаем список портов через библиотеку serialport
+    let ports = available_ports().map_err(|e| format!("Ошибка сканирования портов: {}", e))?;
+
+    // Фильтруем порты: оставляем только USB-порты и COM-порты,
+    // убираем виртуальные ttyS* (стандартные последовательные порты ядра Linux,
+    // которые обычно не нужны пользователю).
     let port_names: Vec<String> = ports
         .into_iter()
         .map(|p| p.port_name)
+        .filter(|name| {
+            // Оставляем:
+            // - /dev/ttyUSB* (USB-serial адаптеры на Linux)
+            // - /dev/ttyACM* (USB CDC ACM устройства на Linux, например Arduino)
+            // - COM* (COM-порты на Windows)
+            name.contains("ttyUSB") || name.contains("ttyACM") || name.starts_with("COM")
+        })
         .collect();
+
+    eprintln!(
+        "[RUST] list_serial_ports: найдено {} порт(ов) после фильтрации: {:?}",
+        port_names.len(),
+        port_names
+    );
 
     Ok(port_names)
 }
@@ -242,13 +259,10 @@ fn open_serial_port(
 /// Команда: записать байты в открытый порт.
 /// Вызывается фронтендом для отправки запроса устройству (например, пакета 0x11).
 #[tauri::command]
-fn write_serial_port(
-    state: tauri::State<'_, SerialState>,
-    data: Vec<u8>,
-) -> Result<(), String> {
+fn write_serial_port(state: tauri::State<'_, SerialState>, data: Vec<u8>) -> Result<(), String> {
     // guard делаем изменяемым (mut), так как ниже мы попросим у него изменяемую ссылку на порт
     let mut guard = state.port.lock().map_err(|e| e.to_string())?;
-    
+
     // as_mut() возвращает Option<&mut Box<dyn SerialPort>>, то есть не-const указатель,
     // через который можно вызывать методы, меняющие состояние порта (например, write_all)
     match guard.as_mut() {
@@ -270,7 +284,7 @@ fn close_serial_port(state: tauri::State<'_, SerialState>) -> Result<(), String>
         stop.store(true, Ordering::Relaxed);
     }
     drop(stop_guard); // отпускаем мьютекс флагов перед взятием мьютекса порта
-    // Убираем порт из состояния: drop дескриптора физически закрывает порт
+                      // Убираем порт из состояния: drop дескриптора физически закрывает порт
     let mut guard = state.port.lock().map_err(|e| e.to_string())?;
     *guard = None;
     Ok(())
@@ -281,24 +295,34 @@ fn close_serial_port(state: tauri::State<'_, SerialState>) -> Result<(), String>
 /// Возвращается сразу после запуска процесса редактора (не дожидается его закрытия).
 #[tauri::command]
 fn open_in_default_editor(path: String) -> Result<(), String> {
-    eprintln!("[RUST] open_in_default_editor: переданный путь = '{}'", path);
-    
+    eprintln!(
+        "[RUST] open_in_default_editor: переданный путь = '{}'",
+        path
+    );
+
     // Преобразуем относительный путь в абсолютный.
     // Если путь уже абсолютный, canonicalize его не изменит.
     // canonicalize также разрешает символические ссылки и убирает ".." и ".".
-    let absolute_path = std::fs::canonicalize(&path)
-        .map_err(|e| format!("Не удалось преобразовать путь '{}' в абсолютный: {}", path, e))?;
-    
-    eprintln!("[RUST] open_in_default_editor: абсолютный путь = '{}'", absolute_path.display());
-    
+    let absolute_path = std::fs::canonicalize(&path).map_err(|e| {
+        format!(
+            "Не удалось преобразовать путь '{}' в абсолютный: {}",
+            path, e
+        )
+    })?;
+
+    eprintln!(
+        "[RUST] open_in_default_editor: абсолютный путь = '{}'",
+        absolute_path.display()
+    );
+
     // Проверяем, что файл существует перед открытием
     if !absolute_path.exists() {
         return Err(format!("Файл не найден: {}", absolute_path.display()));
     }
-    
+
     // Преобразуем PathBuf в обычную String (избегаем проблем с Cow)
     let path_str = absolute_path.to_string_lossy().into_owned();
-    
+
     // Выбираем команду в зависимости от ОС на этапе компиляции
     #[cfg(target_os = "windows")]
     let result = std::process::Command::new("cmd")
@@ -306,9 +330,7 @@ fn open_in_default_editor(path: String) -> Result<(), String> {
         .spawn();
 
     #[cfg(target_os = "macos")]
-    let result = std::process::Command::new("open")
-        .arg(&path_str)
-        .spawn();
+    let result = std::process::Command::new("open").arg(&path_str).spawn();
 
     #[cfg(target_os = "linux")]
     let result = std::process::Command::new("xdg-open")
@@ -316,7 +338,9 @@ fn open_in_default_editor(path: String) -> Result<(), String> {
         .spawn();
 
     // Проверяем, что процесс редактора успешно запущен
-    result.map(|_| ()).map_err(|e| format!("Не удалось открыть файл в редакторе: {}", e))
+    result
+        .map(|_| ())
+        .map_err(|e| format!("Не удалось открыть файл в редакторе: {}", e))
 }
 
 /// Команда: вернуть абсолютный путь к папке Devices рядом с исполняемым файлом.
@@ -324,13 +348,10 @@ fn open_in_default_editor(path: String) -> Result<(), String> {
 #[tauri::command]
 fn get_devices_folder_path() -> Option<String> {
     // Ищем папку Devices рядом с исполняемым файлом (exe/bin)
-    let exe_dir = std::env::current_exe()
-        .ok()?
-        .parent()?
-        .to_path_buf();
-    
+    let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+
     let devices_path = exe_dir.join("Devices");
-    
+
     if devices_path.exists() && devices_path.is_dir() {
         Some(devices_path.to_string_lossy().into_owned())
     } else {
@@ -345,16 +366,98 @@ fn get_devices_folder_path() -> Option<String> {
 #[tauri::command]
 fn read_ini_file(path: String) -> Result<Vec<u8>, String> {
     eprintln!("[RUST] read_ini_file: путь = '{}'", path);
-    
+
     // Читаем сырые байты файла
-    let bytes = std::fs::read(&path)
-        .map_err(|e| format!("Не удалось прочитать файл '{}': {}", path, e))?;
-    
+    let bytes =
+        std::fs::read(&path).map_err(|e| format!("Не удалось прочитать файл '{}': {}", path, e))?;
+
     eprintln!("[RUST] read_ini_file: прочитано {} байт", bytes.len());
-    
+
     // Возвращаем сырые байты: декодирование из windows-1251 будет
     // выполнено на стороне TypeScript через decodeTextBuffer
     Ok(bytes)
+}
+
+/// Команда: открыть папку, содержащую файл, в системном файловом менеджере.
+/// На Windows выделяет файл в Проводнике (explorer /select).
+/// На macOS выделяет файл в Finder (open -R).
+/// На Linux открывает папку через xdg-open (без выделения файла).
+#[tauri::command]
+fn open_file_location(path: String) -> Result<(), String> {
+    eprintln!("[RUST] open_file_location: путь = '{}'", path);
+
+    // Преобразуем путь в абсолютный и проверяем существование
+    let absolute_path = std::fs::canonicalize(&path).map_err(|e| {
+        format!(
+            "Не удалось преобразовать путь '{}' в абсолютный: {}",
+            path, e
+        )
+    })?;
+
+    if !absolute_path.exists() {
+        return Err(format!("Файл не найден: {}", absolute_path.display()));
+    }
+
+        // Выбираем команду в зависимости от ОС:
+    // - Windows: explorer /select,"C:\path\to\file" — открывает папку и выделяет файл
+    // - macOS: open -R /path/to/file — открывает Finder и выделяет файл
+    // - Linux: xdg-open /path/to/folder — открывает папку (выделить файл стандартным способом нельзя)
+    #[cfg(target_os = "windows")]
+    let result = {
+        let path_str = absolute_path.to_string_lossy().into_owned();
+        std::process::Command::new("explorer")
+            .args(["/select,", &path_str])
+            .spawn()
+    };
+
+    #[cfg(target_os = "macos")]
+    let result = {
+        let path_str = absolute_path.to_string_lossy().into_owned();
+        std::process::Command::new("open")
+            .args(["-R", &path_str])
+            .spawn()
+    };
+
+    #[cfg(target_os = "linux")]
+    let result = {
+        // Пытаемся выделить файл через стандартный D-Bus интерфейс FileManager1,
+        // который поддерживается большинством файловых менеджеров (Nautilus, Nemo, Thunar).
+        // Команда: gdbus call --session --dest org.freedesktop.FileManager1 \
+        //   --object-path /org/freedesktop/FileManager1 \
+        //   --method org.freedesktop.FileManager1.ShowItems '["file:///path/to/file"]' ''
+        
+        let file_uri = format!("file://{}", absolute_path.to_string_lossy());
+        let uri_array = format!("[\"{}\"]", file_uri);
+        
+        match std::process::Command::new("gdbus")
+            .args([
+                "call", "--session",
+                "--dest", "org.freedesktop.FileManager1",
+                "--object-path", "/org/freedesktop/FileManager1",
+                "--method", "org.freedesktop.FileManager1.ShowItems",
+                &uri_array,
+                ""
+            ])
+            .spawn() 
+        {
+            Ok(child) => Ok(child),
+            Err(e) => {
+                // Если gdbus не сработал (не установлен или не поддерживается),
+                // открываем папку через xdg-open как запасной вариант
+                eprintln!("[RUST] open_file_location: gdbus не сработал ({}), пробую xdg-open", e);
+                let parent = absolute_path.parent()
+                    .ok_or_else(|| format!("Не удалось получить родительскую папку для {}", absolute_path.display()))?;
+                let parent_str = parent.to_string_lossy().into_owned();
+                std::process::Command::new("xdg-open")
+                    .arg(&parent_str)
+                    .spawn()
+            }
+        }
+    };
+
+    result
+        .map(|_| ())
+        .map_err(|e| format!("Не удалось открыть папку: {}", e))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -377,8 +480,6 @@ pub fn run() {
         // greet — тестовая команда,
         // scan_devices_folder — сканирование папки Devices,
         // list_serial_ports — получение списка COM-портов,
-        // open_serial_port / write_serial_port / close_serial_port —
-        // нативный обмен с устройством через последовательный порт.
         .invoke_handler(tauri::generate_handler![
             greet,
             scan_devices_folder,
@@ -388,8 +489,10 @@ pub fn run() {
             close_serial_port,
             open_in_default_editor,
             get_devices_folder_path,
-            read_ini_file
-        ])
+            read_ini_file,
+            open_file_location
+        ]) // open_serial_port / write_serial_port / close_serial_port —
+        // нативный обмен с устройством через последовательный порт.
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
