@@ -3,6 +3,7 @@
 import { initTableEditor } from '../ini-manager/table-editor.js';
 import { setupSaveButton } from '../ini-manager/save-ini.js';
 import { openIniFile, openIniFolder } from '../ini-manager/file-loader.js';
+import { openIniFileTauri, openIniFolderTauri } from '../ini-manager/file-loader-tauri.js';
 import type { ISerialPort } from '../serial/ISerialPort.js';
 import type { AppState } from '../core/app-state.js';
 import type { IOscilloscopeApi } from '../core/osc-api.js';
@@ -372,18 +373,26 @@ export function initUI(deps: UiManagerDeps): void {
     oscContainer: oscContainerEl
   });
 
-  if (folderActionBtn) folderActionBtn.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    await openIniFile(appState);
-  });
-  if (menuOpenFile) menuOpenFile.addEventListener('click', async () => {
-    await openIniFile(appState);
-    folderDropdown?.classList.remove('show');
-  });
-  if (menuOpenFolder) menuOpenFolder.addEventListener('click', async () => {
-    await openIniFolder(appState);
-    folderDropdown?.classList.remove('show');
-  });
+    if (folderActionBtn) {
+    folderActionBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await openIniFileTauri(appState); // <--- Новая функция
+    });
+  }
+
+  if (menuOpenFile) {
+    menuOpenFile.addEventListener('click', async () => {
+      await openIniFileTauri(appState); // <--- Новая функция
+      folderDropdown?.classList.remove('show');
+    });
+  }
+
+  if (menuOpenFolder) {
+    menuOpenFolder.addEventListener('click', async () => {
+      await openIniFolderTauri(appState); // <--- Новая функция
+      folderDropdown?.classList.remove('show');
+    });
+  }
 
   // Windows: открытие папки недоступно — физически скрываем стрелочку,
   // разделитель и пункт "Открыть папку". Кнопка становится обычной
