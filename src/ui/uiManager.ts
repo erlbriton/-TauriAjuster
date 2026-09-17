@@ -34,6 +34,9 @@ import { showConfirmDialog } from './confirm-dialog.js';
 import { initSerialPortUI } from './manager/serial-port.js';
 import { initDeviceManagementUI } from './manager/device-management.js';
 import { initOscilloscopeUI } from './manager/oscilloscope-ui.js';
+import { initSearchNavigationUI } from './manager/search-navigation.js';
+import { initCommunicationSettingsUI } from './manager/communication-settings.js';
+
 /** Буфер данных канала (типизирован явно, без any) */
 export interface ChannelBuffer {
   push(v: number): void;
@@ -195,185 +198,38 @@ export function initUI(deps: UiManagerDeps): void {
     updateDeviceRegisters
   });
 
-  // ---------------------------------------------------------------------------
-  // Командная строка (кнопка терминала)
-  // ---------------------------------------------------------------------------
+    // --- Инициализация модуля поиска и навигации ---
+  // Делегируем логику поиска, кнопки "Сегодня" и модальных окон в отдельный модуль.
+  
+  const treeSearchOverlayEl = document.getElementById('treeSearchOverlay') as HTMLElement | null;
+  const treeSearchInputEl = document.getElementById('treeSearchInput') as HTMLInputElement | null;
+  const treeSearchStatusEl = document.getElementById('treeSearchStatus') as HTMLElement | null;
+  const treeSearchCloseBtnEl = document.getElementById('treeSearchCloseBtn') as HTMLElement | null;
+  const treeSearchCancelBtnEl = document.getElementById('treeSearchCancelBtn') as HTMLElement | null;
+  const treeSearchFindBtnEl = document.getElementById('treeSearchFindBtn') as HTMLElement | null;
+  const treeSearchSplitEl = document.getElementById('treeSearchSplit') as HTMLElement | null;
+  const treeSearchMainBtnEl = document.getElementById('treeSearchMainBtn') as HTMLElement | null;
+  const treeSearchDropdownBtnEl = document.getElementById('treeSearchDropdownBtn') as HTMLElement | null;
+  const treeSearchMenuEl = document.getElementById('treeSearchMenu') as HTMLElement | null;
+  const todayBtnEl = document.getElementById('todayBtn') as HTMLElement | null;
+
+  initSearchNavigationUI({
+    appState,
+    treeSearchOverlay: treeSearchOverlayEl,
+    treeSearchInput: treeSearchInputEl,
+    treeSearchStatus: treeSearchStatusEl,
+    treeSearchCloseBtn: treeSearchCloseBtnEl,
+    treeSearchCancelBtn: treeSearchCancelBtnEl,
+    treeSearchFindBtn: treeSearchFindBtnEl,
+    treeSearchSplit: treeSearchSplitEl,
+    treeSearchMainBtn: treeSearchMainBtnEl,
+    treeSearchDropdownBtn: treeSearchDropdownBtnEl,
+    treeSearchMenu: treeSearchMenuEl,
+    todayBtn: todayBtnEl
+  });
+
+  // Командная строка и справка остаются здесь, так как они простые
   initCmdlineUI();
-  initHelpUI();
-
-  // Клавиша F1: открываем справку приложения вместо справки браузера.
-  // preventDefault() подавляет действие браузера по умолчанию.
-  document.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'F1') {
-      e.preventDefault();
-      showHelpWindow();
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // Окно "Новое устройство" (если родной INI не найден)
-  // ---------------------------------------------------------------------------
-  initNewDeviceUI();
-  initBackupUI();
-  initParamPropertiesUI();
-  setBackupLoadFn((content, fileName, file, handle) => processSingleFileContent(content, fileName, appState, file, handle));
-
-  // ---------------------------------------------------------------------------
-  // Кнопка "Сегодня": текущая дата в поле даты (формат ДД.ММ.ГГГГ)
-  // ---------------------------------------------------------------------------
-  document.getElementById('todayBtn')?.addEventListener('click', () => {
-      const dateInput = document.querySelector('.date-input') as HTMLInputElement | null;
-      if (!dateInput) return;
-      const now = new Date();
-      const dd = String(now.getDate()).padStart(2, '0');
-      const mm = String(now.getMonth() + 1).padStart(2, '0');
-      dateInput.value = `${dd}.${mm}.${now.getFullYear()}`;
-  });
-
-  // ---------------------------------------------------------------------------
-  // Кнопка "?" — поиск имени в списке устройств (по "Место установки")
-  // ---------------------------------------------------------------------------
-  // === Панель поиска параметра в таблице Modbus ===
-  const searchPanel = new SearchPanel();
-  searchPanel.onSelect = (item) => {
-    console.log('[uiManager] searchPanel.onSelect: item.id =', item.id);
-    
-    // Убираем выделение со ВСЕХ строк в таблице Modbus
-    const allSelected = document.querySelectorAll('#grid-data-rows tr[data-key].selected');
-    console.log('[uiManager] Найдено строк с .selected:', allSelected.length);
-    allSelected.forEach((el) => {
-      el.classList.remove('selected');
-    });
-    
-    // Ищем строку по data-key и выделяем
-    const row = document.querySelector<HTMLTableRowElement>(`#grid-data-rows tr[data-key="${CSS.escape(item.id)}"]`);
-    if (row) {
-      row.classList.add('selected');
-      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      console.log('[uiManager] Строка выделена:', item.id);
-    } else {
-      console.warn('[uiManager] Строка не найдена:', item.id);
-    }
-  };
-
-  const treeSearchOverlay = document.getElementById('treeSearchOverlay');
-  const treeSearchInput = document.getElementById('treeSearchInput') as HTMLInputElement | null;
-  const treeSearchStatus = document.getElementById('treeSearchStatus');
-
-  const hideTreeSearch = (): void => {
-      treeSearchOverlay?.classList.add('hidden');
-  };
-
-  const doTreeSearch = (): void => {
-      const query = (treeSearchInput?.value ?? '').trim();
-      if (!query) {
-          if (treeSearchStatus) treeSearchStatus.textContent = 'Введите название места.';
-          return;
-      }
-      const queryLower = query.toLowerCase();
-
-      // Уникальные имена групп ("Место установки") в порядке загрузки.
-      const all = getAllDevices();
-      const keys: string[] = [];
-      for (const d of all) {
-          const k = getDeviceGroupKey(d, 'location');
-          if (!keys.includes(k)) keys.push(k);
-      }
-
-      // Точный поиск: сначала полное совпадение, затем начало строки, затем вхождение.
-      const matchedKey =
-          keys.find((k) => k.toLowerCase() === queryLower) ??
-          keys.find((k) => k.toLowerCase().startsWith(queryLower)) ??
-          keys.find((k) => k.toLowerCase().includes(queryLower));
-
-      if (!matchedKey) {
-          if (treeSearchStatus) treeSearchStatus.textContent = `Не найдено: ${query}`;
-          return;
-      }
-
-      setTreeGroupMode('location');
-      renderDeviceTree();
-
-      // Раскрываем найденную группу и выделяем первый файл в ней.
-      const detailsList = document.querySelectorAll('details.tree-location');
-      for (const details of detailsList) {
-          const summary = details.querySelector('summary');
-          if ((summary?.textContent ?? '').trim() !== matchedKey) continue;
-          (details as HTMLDetailsElement).open = true;
-          const firstLeaf = details.querySelector<HTMLLIElement>('.tree-id-item.is-leaf');
-          if (firstLeaf) firstLeaf.click();
-          break;
-      }
-      hideTreeSearch();
-  };
-
-  const treeSearchSplit = document.getElementById('treeSearchSplit');
-  const treeSearchMainBtn = document.getElementById('treeSearchMainBtn');
-  const treeSearchDropdownBtn = document.getElementById('treeSearchDropdownBtn');
-  const treeSearchMenu = document.getElementById('treeSearchMenu');
-
-  const openTreeSearchOverlay = (): void => {
-      if (!treeSearchOverlay) return;
-      if (treeSearchInput) treeSearchInput.value = '';
-      if (treeSearchStatus) treeSearchStatus.textContent = '';
-      treeSearchOverlay.classList.remove('hidden');
-      treeSearchInput?.focus();
-  };
-
-  // Клик по основной части (знак вопроса) — сразу "Поиск места установки"
-  treeSearchMainBtn?.addEventListener('click', openTreeSearchOverlay);
-
-  // Клик по треугольнику — показать/скрыть меню
-  treeSearchDropdownBtn?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      treeSearchMenu?.classList.toggle('show');
-  });
-
-  // Клик по пункту меню
-  treeSearchMenu?.addEventListener('click', (e) => {
-      const target = e.target as HTMLElement;
-      const action = target.getAttribute('data-action');
-      if (!action) return;
-
-      treeSearchMenu.classList.remove('show');
-
-      if (action === 'location') {
-          openTreeSearchOverlay();
-      } else if (action === 'param') {
-          // Собираем список параметров из текущей секции таблицы
-          const modeSelect = document.querySelector<HTMLSelectElement>('.toolbar-device-mode-select');
-          const selectedMode = modeSelect && modeSelect.value ? modeSelect.value : 'FLASH';
-          
-          if (currentIniConfig) {
-              const params = currentIniConfig.getSection(selectedMode);
-              const items = params.map((p) => ({ id: p.id, name: p.name }));
-              searchPanel.open(items);
-          } else {
-              console.warn('[uiManager] Нет загруженного INI для поиска параметра');
-          }
-      }
-  });
-
-  // Закрыть меню при клике вне его
-  document.addEventListener('click', (e) => {
-      if (treeSearchMenu && treeSearchMenu.classList.contains('show')) {
-          if (treeSearchSplit && !treeSearchSplit.contains(e.target as Node)) {
-              treeSearchMenu.classList.remove('show');
-          }
-      }
-  });
-  document.getElementById('treeSearchCloseBtn')?.addEventListener('click', hideTreeSearch);
-  document.getElementById('treeSearchCancelBtn')?.addEventListener('click', hideTreeSearch);
-  document.getElementById('treeSearchFindBtn')?.addEventListener('click', doTreeSearch);
-  treeSearchOverlay?.addEventListener('click', (e: MouseEvent) => {
-      if (e.target === treeSearchOverlay) hideTreeSearch();
-  });
-  treeSearchInput?.addEventListener('keydown', (e: KeyboardEvent) => {
-      if (e.key === 'Enter') { e.preventDefault(); doTreeSearch(); }
-      if (e.key === 'Escape') { e.preventDefault(); hideTreeSearch(); }
-  });
-  setNewDeviceAddToLoaded((content, fileName, file, handle) =>
-    processSingleFileContent(content, fileName, appState, file, handle));
 
   // ---------------------------------------------------------------------------
   // Отчёты (кнопка 📋)
@@ -494,128 +350,27 @@ export function initUI(deps: UiManagerDeps): void {
     },
   });
 
-      // Функция переключения видимости осциллографа
-  const toggleOscilloscope = async () => {
-    const oscContainerEl = document.getElementById('osc-container');
-    if (!oscContainerEl) return;
-    const isHidden = oscContainerEl.classList.contains('hidden') || oscContainerEl.style.display === 'none';
+        // --- Инициализация модуля управления осциллографом ---
+  // Делегируем логику переключения видимости и ресайзера в отдельный модуль.
+  
+  const oscContainerEl = document.getElementById('osc-container') as HTMLElement | null;
+  const oscResizerEl = document.getElementById('oscResizer') as HTMLElement | null;
 
-    if (isHidden) {
-      oscContainerEl.classList.remove('hidden');
-      oscContainerEl.style.display = 'block';
-      appState.isPolling = true;
-      const osc = window.osc;
-      if (osc) {
-        await osc.initialize(oscContainerEl ?? undefined);
-        if (appState.currentIniContent) {
-          await osc.loadIniContent(appState.currentIniContent);
-        }
-        if (typeof osc.setConnectionStatus === 'function') {
-          osc.setConnectionStatus(
-            serial.isConnected,
-            serial.isConnected ? undefined : 'Нет связи с устройством.'
-          );
-        }
-        readLoop(serial, parser, osc, buffers, appState);
-      }
-    } else {
-      oscContainerEl.classList.add('hidden');
-      oscContainerEl.style.display = 'none';
-      appState.isPolling = false;
-    }
-  };
-
-  // 1. Клик по основной части кнопки (📈)
-  if (toggleOscMainBtn) {
-    toggleOscMainBtn.addEventListener('click', async () => {
-      await toggleOscilloscope();
-    });
-  }
-
-  // 2. Клик по стрелочке (открыть меню)
-  if (toggleOscArrowBtn) {
-    toggleOscArrowBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleOscDropdown?.classList.toggle('show');
-    });
-  }
-
-  // 3. Пункт меню "Осциллограф"
-  if (menuToggleOsc) {
-    menuToggleOsc.addEventListener('click', async () => {
-      await toggleOscilloscope();
-      toggleOscDropdown?.classList.remove('show');
-    });
-  }
-
-      // 4. Пункт меню "Просмотр осциллограммы" — открывает новую вкладку
-  if (menuViewRec) {
-    menuViewRec.addEventListener('click', () => {
-      toggleOscDropdown?.classList.remove('show');
-      window.open(import.meta.env.BASE_URL + 'rec-viewer.html', '_blank');
-    });
-  }
-
-  // --- Ресайзер осциллографа ---
-  const oscResizer = document.getElementById('oscResizer') as HTMLElement | null;
-  const oscContainerForResize = document.getElementById('osc-container') as HTMLElement | null;
-
-  if (oscResizer && oscContainerForResize) {
-      let isResizing = false;
-      let startX = 0;
-      let startWidth = 0;
-
-      oscResizer.addEventListener('mousedown', (e) => {
-          isResizing = true;
-          startX = e.clientX;
-          startWidth = oscContainerForResize.offsetWidth;
-          oscResizer.classList.add('resizing');
-          document.body.style.cursor = 'col-resize';
-          document.body.style.userSelect = 'none';
-      });
-
-      document.addEventListener('mousemove', (e) => {
-          if (!isResizing) return;
-          // Не меняем ширину в реальном времени — только запоминаем позицию
-      });
-
-      document.addEventListener('mouseup', (e) => {
-          if (!isResizing) return;
-          isResizing = false;
-          oscResizer.classList.remove('resizing');
-          document.body.style.cursor = '';
-          document.body.style.userSelect = '';
-
-          // Применяем новую ширину "скачком"
-          const deltaX = e.clientX - startX;
-          const newWidth = Math.max(200, startWidth + deltaX); // Минимум 200px
-          oscContainerForResize.style.width = `${newWidth}px`;
-
-          // Перерисовываем графики осциллографа под новую ширину
-          // (requestAnimationFrame — чтобы браузер успел пересчитать layout)
-          const oscInstance = window.osc;
-          if (oscInstance && typeof oscInstance.syncCanvasLayout === 'function') {
-              requestAnimationFrame(() => {
-                  oscInstance.syncCanvasLayout();
-              });
-          }
-      });
-
-      // Скрывать ресайзер, когда осциллограф скрыт
-      const updateResizerVisibility = () => {
-          if (oscContainerForResize.classList.contains('hidden')) {
-              oscResizer.classList.add('hidden');
-          } else {
-              oscResizer.classList.remove('hidden');
-          }
-      };
-
-      updateResizerVisibility();
-      
-      // Отслеживать изменение видимости осциллографа
-      const observer = new MutationObserver(updateResizerVisibility);
-      observer.observe(oscContainerForResize, { attributes: true, attributeFilter: ['class', 'style'] });
-  }
+  initOscilloscopeUI({
+    serial,
+    appState,
+    parser,
+    view,
+    buffers,
+    readLoop, // Передаём функцию readLoop из замыкания initUI
+    toggleOscMainBtn,
+    toggleOscArrowBtn,
+    toggleOscDropdown,
+    menuToggleOsc,
+    menuViewRec,
+    oscResizer: oscResizerEl,
+    oscContainer: oscContainerEl
+  });
 
   if (folderActionBtn) folderActionBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -649,119 +404,29 @@ export function initUI(deps: UiManagerDeps): void {
     toggleOscDropdown?.classList.remove('show');
   });
 
-  // Обработчик смены скорости: ЖЕСТКИЙ сброс и переподключение
-    // Обработчик смены скорости: просто запоминаем выбор для следующего подключения.
-  // Переподключение "на лету" удалено из-за нестабильности Web Serial API.
-  if (baudSelect) {
-    baudSelect.addEventListener('change', () => {
-      const newBaudRate = parseInt(baudSelect.value, 10) || 115200;
-      
-      if (serial.isConnected) {
-        console.log(`[UI] Скорость изменена на ${newBaudRate}. Для применения необходимо переподключиться (кнопка "Подключить").`);
-        // Опционально: можно показать подсказку пользователю, но пока оставим лог.
-        // showIdModal(`Скорость изменена на ${newBaudRate}. Нажмите "Подключить", чтобы применить.`);
-      } else {
-        console.log(`[UI] Скорость установлена на ${newBaudRate} (будет использована при подключении).`);
-      }
-    });
-  }
+    // --- Инициализация модуля настроек связи ---
+  // Делегируем логику выбора скорости, режима BUS, адреса и глобальных событий.
+  
+  const busSelectEl = document.getElementById('busSelect') as HTMLSelectElement | null;
+  const rtuControlsEl = document.getElementById('rtuControls') as HTMLElement | null;
+  const tcpControlsEl = document.getElementById('tcpControls') as HTMLElement | null;
 
-  // ---------------------------------------------------------------------------
-  // Переключение BUS: MODBUS RTU <-> MODBUS TCP/IP
-  // RTU: видны COM, BPS, FE. TCP/IP: видны IP и Port.
-  // ---------------------------------------------------------------------------
-  const busSelect = document.getElementById('busSelect') as HTMLSelectElement | null;
-  const rtuControls = document.getElementById('rtuControls') as HTMLElement | null;
-  const tcpControls = document.getElementById('tcpControls') as HTMLElement | null;
-
-  const applyBusMode = (): void => {
-    const isTcp = busSelect?.value === 'TCP';
-    if (rtuControls) rtuControls.style.display = isTcp ? 'none' : '';
-    if (tcpControls) tcpControls.style.display = isTcp ? '' : 'none';
-    console.log(`[UI] Режим связи: ${isTcp ? 'MODBUS TCP/IP' : 'MODBUS RTU'}`);
-  };
-
-  if (busSelect) {
-    busSelect.addEventListener('change', applyBusMode);
-    applyBusMode(); // применяем текущий режим при старте
-  }
-
-  // Кнопка адреса Modbus: окно ввода, новый адрес применяется ко всему обмену
-  if (addrBtn) {
-    const updateAddrLabel = (): void => {
-      addrBtn.textContent = 'Адрес: x' + appState.slaveAddress.toString(16).toUpperCase().padStart(2, '0');
-    };
-    updateAddrLabel();
-    addrBtn.addEventListener('click', async () => {
-      const newAddr = await showAddressDialog(appState.slaveAddress);
-      if (newAddr !== null && newAddr !== appState.slaveAddress) {
-        appState.slaveAddress = newAddr;
-        updateAddrLabel();
-        console.log(`[UI] Адрес Modbus изменён на ${newAddr} (0x${newAddr.toString(16).toUpperCase().padStart(2, '0')})`);
-        
-        // Уведомляем осциллограф о смене адреса
-        const osc = window.osc;
-        if (osc && typeof osc.setSlaveAddress === 'function') {
-          osc.setSlaveAddress(newAddr);
-          console.log(`[UI] Осциллограф уведомлён о новом адресе: ${newAddr}`);
-        }
-      }
-    });
-  }
+  initCommunicationSettingsUI({
+    serial,
+    appState,
+    baudSelect,
+    busSelect: busSelectEl,
+    rtuControls: rtuControlsEl,
+    tcpControls: tcpControlsEl,
+    addrBtn,
+    readLoop,
+    parser,
+    view,
+    buffers
+  });
 
   initTableEditor('grid-data-rows', appState);
   setupSaveButton(appState);
-
-      // ============================================================================
-  // Обработчики событий бизнес-логики (готово к Tauri)
-  // В нативном приложении тело этих функций будет заменено на вызовы Tauri API.
-  // ============================================================================
-
-    // Событие: Контроллер перестал отвечать (серия таймаутов)
-  window.addEventListener('app:controller-not-responding', (e: Event) => {
-    const detail = (e as CustomEvent).detail as { consecutiveTimeouts?: number } | undefined;
-    const count = detail?.consecutiveTimeouts ?? 0;
-    console.log(`[UI] Получено событие "контроллер не отвечает" (подряд ошибок: ${count})`);
-
-    // 1. Показываем компактное окно ВСЕГДА (независимо от осциллографа)
-    showCompactError('Контроллер не отвечает. Проверьте адрес и подключение.');
-
-    // 2. Если осциллограф открыт — замораживаем его рендер (без своего окна)
-    const osc = window.osc;
-    if (osc && typeof (osc as any).showFrozenState === 'function') {
-      (osc as any).showFrozenState('');
-    }
-  });
-
-   // Событие: Контроллер снова начал отвечать
-  window.addEventListener('app:controller-responding', () => {
-    console.log('[UI] Получено событие "контроллер отвечает"');
-    const osc = window.osc;
-    if (osc && typeof (osc as any).resumeFromFrozen === 'function') {
-      (osc as any).resumeFromFrozen();
-    }
-  });
-
-  // Событие: Запрос на перезапуск опроса после записи в контроллер
-  window.addEventListener('app:request-polling-restart', () => {
-    if (serial && serial.isConnected && appState.isPolling && !appState.isLoopRunning) {
-      console.log('[UI] Перезапуск readLoop по запросу после записи...');
-      appState.isLoopRunning = false;
-      void readLoop(serial, parser, view, buffers, appState);
-    }
-  });
-
-  // Конец обработчиков событий
-  // ============================================================================
-
-  // Защита от закрытия вкладки при несохранённых изменениях:
-  // браузер покажет стандартное предупреждение.
-  window.addEventListener('beforeunload', (e: BeforeUnloadEvent) => {
-    if (hasAnyDirty()) {
-      e.preventDefault();
-      e.returnValue = '';
-    }
-  });
 
   console.log("UI Manager: Интерфейс и обработчики инициализированы.");
 }
