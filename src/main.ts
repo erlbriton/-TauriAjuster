@@ -12,7 +12,8 @@ import './ui/layout.js';
 import { showIdModal } from './ui/ui.js';
 import { initFwUpdateModal } from './ui/fw-update-modal.js';
 import { updateDeviceRegisters } from './serial/device_updater.js';
-import { setupFileHandling, openIniFile } from './ini-manager/file-loader.js';
+//import { setupFileHandling, openIniFile } from './ini-manager/file-loader.js';
+//import { setupFileHandling } from './ini-manager/file-loader.js';
 // Tauri-автозагрузчик: читает INI-файлы из папки Devices рядом с exe/bin
 import { autoLoadDevicesFolder } from './core/platform/tauri-autoloader.js';
 import { initDropZone } from './ini-manager/drop-loader.js';
@@ -89,7 +90,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         initUI({
             serial, appState, parser, view: osc, buffers,
-            setupFileHandling,
             updateComInterfaceName,
             executeDeviceConnection,
             executeDeviceIdentification,

@@ -2,7 +2,7 @@
 
 import { initTableEditor } from '../ini-manager/table-editor.js';
 import { setupSaveButton } from '../ini-manager/save-ini.js';
-import { openIniFile, openIniFolder } from '../ini-manager/file-loader.js';
+//import { openIniFile, openIniFolder } from '../ini-manager/file-loader.js';
 import { openIniFileTauri, openIniFolderTauri } from '../ini-manager/file-loader-tauri.js';
 import type { ISerialPort } from '../serial/ISerialPort.js';
 import type { AppState } from '../core/app-state.js';
@@ -54,8 +54,8 @@ export interface UiManagerDeps {
   parser: ModbusParser;                  // было any
   view: IOscilloscopeApi;                // было any
   buffers: ChannelBuffer[];              // было any
-  setupFileHandling: (picker: HTMLInputElement, state: AppState) => void;
-  setupFolderHandling?: (picker: HTMLInputElement) => void;
+  //setupFileHandling: (picker: HTMLInputElement, state: AppState) => void;
+  //setupFolderHandling?: (picker: HTMLInputElement) => void;
   updateComInterfaceName: (serial: ISerialPort, select: HTMLSelectElement | null) => string;
   executeDeviceConnection: (
     serial: ISerialPort,
@@ -98,7 +98,7 @@ export function initUI(deps: UiManagerDeps): void {
     */
   const {
     serial, appState, parser, view, buffers,
-    setupFileHandling, setupFolderHandling, updateComInterfaceName,
+    updateComInterfaceName,
     executeDeviceConnection, executeDeviceIdentification, readLoop, showIdModal, updateDeviceRegisters
   } = deps;
   let isManualDisconnect = false;
@@ -155,7 +155,7 @@ export function initUI(deps: UiManagerDeps): void {
     restoreConnection
   });
 
-  if (folderPicker && typeof setupFolderHandling === 'function') setupFolderHandling(folderPicker);
+ // if (folderPicker && typeof setupFolderHandling === 'function') setupFolderHandling(folderPicker);
 
   // Обёртка loadIniContent — типизирована через IOscilloscopeApi
   if (view && typeof view.loadIniContent === 'function' && !(view as unknown as Record<string, unknown>).__loadIniContentWrapped) {
