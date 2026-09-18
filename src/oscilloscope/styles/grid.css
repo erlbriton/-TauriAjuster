@@ -364,3 +364,22 @@
     font-family: monospace;
     font-weight: 500;
 }
+/* --- Custom Scrollbar for Oscilloscope --- */
+#channelRows::-webkit-scrollbar {
+    width: 12px;
+    background-color: #1a1a1e; /* Тёмный фон дорожки */
+}
+
+#channelRows::-webkit-scrollbar-thumb {
+    background-color: #666879; /* Цвет ползунка (контрастный) */
+    border-radius: 6px;
+    border: 1px solid #1a1a1e; /* Отступ от краёв */
+}
+
+#channelRows::-webkit-scrollbar-thumb:hover {
+    background-color: #9f9fb1; /* Цвет при наведении */
+}
+
+#channelRows::-webkit-scrollbar-track {
+    background-color: #1a1a1e;
+}

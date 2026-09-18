@@ -216,3 +216,23 @@
     position: relative;
     overflow: hidden;
 }
+
+/* Кастомный скроллбар для обёртки таблицы осциллографа */
+.osc-table-wrapper::-webkit-scrollbar {
+    width: 12px;
+    background-color: #1a1a1e;
+}
+
+.osc-table-wrapper::-webkit-scrollbar-thumb {
+    background-color: #3a3a44;
+    border-radius: 6px;
+    border: 2px solid #1a1a1e;
+}
+
+.osc-table-wrapper::-webkit-scrollbar-thumb:hover {
+    background-color: #50505c;
+}
+
+.osc-table-wrapper::-webkit-scrollbar-track {
+    background-color: #1a1a1e;
+}
