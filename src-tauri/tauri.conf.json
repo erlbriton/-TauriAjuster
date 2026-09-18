@@ -20,7 +20,33 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": [
+        {
+          "identifier": "main-capability",
+          "description": "Capability for the main window to access fs and dialog",
+          "windows": [
+            "main"
+          ],
+          "permissions": [
+            "core:default",
+            "dialog:default",
+            {
+              "identifier": "fs:allow-write-file",
+              "allow": [
+                { "path": "**" }
+              ]
+            },
+            {
+              "identifier": "fs:allow-read-file",
+              "allow": [
+                { "path": "**" }
+              ]
+            },
+            "fs:default"
+          ]
+        }
+      ]
     }
   },
   "bundle": {

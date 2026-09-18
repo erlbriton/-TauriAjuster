@@ -27,7 +27,7 @@ import { CursorsFooter } from "./ui/CursorsFooter";
 import { ConnectionModal } from "./ui/ConnectionModal";
 import { TimelineScrollbar } from "./ui/TimelineScrollbar";
 import type { WebSerialPort } from "../serial/web-serial-types.js";
-import { BrowserFileSaver } from "../core/platform/browser-fs.js";
+import { TauriFileSaver } from "../core/platform/tauri-fs.js"; // <-- ИЗМЕНЕНО: заменен импорт
 import { buildWriteMultipleRegistersRequest } from "../serial/modbus.js";
 import { handleCommandSubmit, handleMultiplyCommand, type CommandContext } from "./scope/OscilloscopeCommands";
 import { 
@@ -158,7 +158,7 @@ export class Oscilloscope {
     if (options?.skipRecorder) {
       this.recorder = null;
     } else {
-      this.recorder = new Recorder(this.archive, new BrowserFileSaver());
+      this.recorder = new Recorder(this.archive, new TauriFileSaver()); // <-- ИЗМЕНЕНО: заменен класс
     }
     
     this.renderer = new Renderer(this.settings, this.archive);
