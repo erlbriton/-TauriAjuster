@@ -135,12 +135,18 @@ export function initOscilloscopeUI(deps: OscilloscopeUIDeps): void {
     });
   }
 
-  // 4. Пункт меню "Просмотр осциллограммы" (открывает viewer в новой вкладке)
+  // 4. Пункт меню "Просмотр осциллограммы" (открывает нативное окно Tauri)
   if (menuViewRec) {
-    menuViewRec.addEventListener('click', () => {
+    menuViewRec.addEventListener('click', async () => {
       toggleOscDropdown?.classList.remove('show');
-      const baseUrl = import.meta.env.BASE_URL || '/';
-      window.open(baseUrl + 'rec-viewer.html', '_blank');
+      try {
+        // Вызываем Rust-команду для создания нового окна
+        await window.__TAURI__.core.invoke('open_rec_viewer');
+      } catch (error) {
+        console.error('[UI] Ошибка открытия просмотрщика осциллограмм:', error);
+        // Опционально: показать пользователю сообщение об ошибке
+        alert('Не удалось открыть окно просмотра осциллограмм. Проверьте логи.');
+      }
     });
   }
 

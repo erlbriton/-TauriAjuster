@@ -378,6 +378,35 @@ fn read_ini_file(path: String) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+/// Команда: открыть новое окно для просмотра осциллограмм (.rec файлов).
+/// Создает отдельное окно Tauri с загрузкой rec-viewer.html.
+#[tauri::command]
+fn open_rec_viewer(app_handle: tauri::AppHandle) -> Result<(), String> {
+    eprintln!("[RUST] open_rec_viewer: создание нового окна");
+
+    // Создаем новое окно с уникальной меткой
+    let window_builder = tauri::WebviewWindowBuilder::new(
+        &app_handle,
+        "rec_viewer", // Уникальная метка окна
+        tauri::WebviewUrl::App("rec-viewer.html".into()), // Загружаем rec-viewer.html из ресурсов приложения
+    )
+    .title("Просмотр осциллограммы")
+    .inner_size(1024.0, 768.0)
+    .resizable(true)
+    .build();
+
+    match window_builder {
+        Ok(_window) => {
+            eprintln!("[RUST] open_rec_viewer: окно успешно создано");
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("[RUST] open_rec_viewer: ошибка создания окна: {}", e);
+            Err(format!("Не удалось открыть окно просмотрщика: {}", e))
+        }
+    }
+}
+
 /// Команда: открыть папку, содержащую файл, в системном файловом менеджере.
 /// На Windows выделяет файл в Проводнике (explorer /select).
 /// На macOS выделяет файл в Finder (open -R).
@@ -490,7 +519,8 @@ pub fn run() {
             open_in_default_editor,
             get_devices_folder_path,
             read_ini_file,
-            open_file_location
+            open_file_location,
+            open_rec_viewer
         ]) // open_serial_port / write_serial_port / close_serial_port —
         // нативный обмен с устройством через последовательный порт.
         .run(tauri::generate_context!())
