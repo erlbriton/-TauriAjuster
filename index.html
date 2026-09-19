@@ -447,9 +447,13 @@
 
       <!-- Контекстное меню дерева устройств -->
       <div id="treeContextMenu" class="context-menu hidden">
-        <div class="context-menu-item" id="ctxDelete">Удалить</div>
+                <div class="context-menu-item" id="ctxDelete">Удалить</div>
         <div class="context-menu-item" id="ctxOpenFile">Открыть файл для редактирования</div>
         <div class="context-menu-item" id="ctxOpenFolder">Открыть папку с файлом</div>
+        <!-- Четвёртый пункт: физически удаляет INI-файл с диска и убирает его из списка.
+             Стоит последним и отделён от обычного "Удалить", чтобы снизить риск
+             случайного клика по деструктивному действию. -->
+        <div class="context-menu-item" id="ctxDeleteFromDisk">Удалить с диска</div>
       </div>
 
       <!-- Контекстное меню группы устройств (один пункт) -->

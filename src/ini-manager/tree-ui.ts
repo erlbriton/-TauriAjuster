@@ -145,6 +145,56 @@ if (ctxGroupDeleteEl) {
 }
 
 // Пункт меню "Удалить": убирает устройство из списка загруженных
+/**
+ * Общая часть удаления устройства из списка (реестра) приложения.
+ * Убирает запись из реестра, рассылает событие app:device-removed
+ * (по нему file-loader уберёт файл из хранилища и синхронизирует список
+ * с осциллографом), перерисовывает дерево и, если удалённый файл был
+ * активным (подсвеченным), выбирает первый оставшийся файл либо очищает
+ * таблицу и форму устройства.
+ * Вынесена в отдельную функцию, чтобы её использовали ОБА пункта меню:
+ * "Удалить" (только из списка) и "Удалить с диска" (файл + список).
+ */
+async function removeDeviceFromRegistryAndRefresh(target: DeviceRegistryItem): Promise<void> {
+    // Проверяем, был ли удаляемый файл текущим (подсвеченным)
+    const wasSelected = document.querySelector(`.tree-id-item.is-selected[data-device-id="${CSS.escape(target.id)}"]`);
+
+    const removed = removeDeviceItemFromRegistry(target);
+    if (removed) {
+        // file-loader по этому событию уберёт файл из хранилища
+        // и синхронизирует список с осциллографом
+        window.dispatchEvent(new CustomEvent('app:device-removed', {
+            detail: { id: String(target.id) },
+        }));
+        renderDeviceTree();
+
+        // Если удалили текущий файл — выбираем другой или очищаем таблицу
+        if (wasSelected) {
+            const remaining = getAllDevices();
+            if (remaining.length > 0) {
+                // Выбираем первый оставшийся файл в дереве
+                const firstLi = document.querySelector<HTMLLIElement>('.tree-id-item.is-leaf');
+                if (firstLi) {
+                    // Раскрываем родительскую группу <details>, если она свёрнута
+                    const details = firstLi.closest('details');
+                    if (details && !(details as HTMLDetailsElement).open) {
+                        (details as HTMLDetailsElement).open = true;
+                    }
+                    firstLi.click();
+                    // Прокручиваем, чтобы подсвеченный файл был виден
+                    firstLi.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            } else {
+                // Файлов не осталось — очищаем таблицу и форму
+                setCurrentIniConfig(null);
+                renderModbusTable();
+                populateDeviceForm({});
+            }
+        }
+    }
+}
+
+// Пункт меню "Удалить": убирает устройство из списка загруженных, файл на диске НЕ трогает
 const ctxDeleteEl = document.getElementById('ctxDelete');
 if (ctxDeleteEl) {
     ctxDeleteEl.addEventListener('click', async () => {
@@ -159,43 +209,88 @@ if (ctxDeleteEl) {
             }
             clearAllDirty();
         }
-        
-        // Проверяем, был ли удаляемый файл текущим (подсвеченным)
-        const wasSelected = document.querySelector(`.tree-id-item.is-selected[data-device-id="${CSS.escape(contextTarget.id)}"]`);
-        
-        const removed = removeDeviceItemFromRegistry(contextTarget);
-        if (removed) {
-            // file-loader по этому событию уберёт файл из хранилища
-            // и синхронизирует список с осциллографом
-            window.dispatchEvent(new CustomEvent('app:device-removed', {
-                detail: { id: String(contextTarget.id) },
-            }));
-            renderDeviceTree();
-            
-            // Если удалили текущий файл — выбираем другой или очищаем таблицу
-            if (wasSelected) {
-                const remaining = getAllDevices();
-                if (remaining.length > 0) {
-                    // Выбираем первый оставшийся файл в дереве
-                    const firstLi = document.querySelector<HTMLLIElement>('.tree-id-item.is-leaf');
-                    if (firstLi) {
-                        // Раскрываем родительскую группу <details>, если она свёрнута
-                        const details = firstLi.closest('details');
-                        if (details && !(details as HTMLDetailsElement).open) {
-                            (details as HTMLDetailsElement).open = true;
-                        }
-                        firstLi.click();
-                        // Прокручиваем, чтобы подсвеченный файл был виден
-                        firstLi.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    }
-                } else {
-                    // Файлов не осталось — очищаем таблицу и форму
-                    setCurrentIniConfig(null);
-                    renderModbusTable();
-                    populateDeviceForm({});
-                }
+
+        // Общая логика удаления из списка (вынесена в функцию выше)
+        await removeDeviceFromRegistryAndRefresh(contextTarget);
+        contextTarget = null;
+        hideTreeContextMenu();
+    });
+}
+
+// Пункт меню "Удалить с диска": физически удаляет INI-файл с диска
+// (безвозвратно), затем убирает устройство из списка загруженных.
+const ctxDeleteFromDiskEl = document.getElementById('ctxDeleteFromDisk');
+if (ctxDeleteFromDiskEl) {
+    ctxDeleteFromDiskEl.addEventListener('click', async () => {
+        if (!contextTarget) return;
+
+        // 1. Если есть несохранённые изменения — спросить, записать ли их на диск.
+        //    Тот же вопрос, что задаёт пункт "Удалить": иначе несохранённые правки
+        //    ДРУГИХ открытых файлов исчезнут без предупреждения.
+        if (hasAnyDirty()) {
+            const save = await showConfirmDialog('Записать изменения на диск перед удалением?');
+            if (save === null) {
+                contextTarget = null;
+                hideTreeContextMenu();
+                return; // Отмена
+            }
+            if (save) {
+                const appState = (window as unknown as { appState?: AppState }).appState;
+                if (appState) await saveIniChanges(appState);
+            }
+            clearAllDirty();
+        }
+
+        // 2. Ищем путь к файлу в fileStore (точно так же, как это делает
+        //    пункт "Открыть папку с файлом"): записи хранилища сопоставляются
+        //    с устройствами по id.
+        const fileStore = getFileStore();
+        let filePath: string | undefined;
+        for (const entry of fileStore.values()) {
+            if (entry.id === String(contextTarget.id)) {
+                filePath = entry.path;
+                break;
             }
         }
+
+        if (!filePath) {
+            // Без пути удалять нечего — сообщаем и выходим
+            console.warn('[tree-ui] Путь к файлу не найден в fileStore для устройства:', contextTarget.id);
+            alert('Не удалось определить путь к файлу на диске.');
+            contextTarget = null;
+            hideTreeContextMenu();
+            return;
+        }
+
+        // 3. Подтверждение БЕЗВОЗВРАТНОГО удаления с диска (с показом пути,
+        //    чтобы пользователь точно понимал, какой файл уходит).
+        const confirmed = await showConfirmDialog(
+            `Удалить файл с диска безвозвратно?\n\n${filePath}`
+        );
+        if (confirmed !== true) {
+            // Отмена или закрытие диалога — ничего не делаем
+            contextTarget = null;
+            hideTreeContextMenu();
+            return;
+        }
+
+        // 4. Физическое удаление файла через Rust-команду.
+        //    Именно Rust, а не плагин fs: рабочая папка приложения может лежать
+        //    где угодно, а скоупы плагина fs запретили бы произвольный путь.
+        try {
+            await window.__TAURI__.core.invoke('delete_file_from_disk', { path: filePath });
+        } catch (err) {
+            console.error('[tree-ui] Ошибка удаления файла с диска:', err);
+            alert(`Не удалось удалить файл с диска:\n${err instanceof Error ? err.message : String(err)}`);
+            contextTarget = null;
+            hideTreeContextMenu();
+            return;
+        }
+
+        // 5. Файл удалён с диска — убираем устройство из списка загруженных
+        //    (та же логика, что у пункта "Удалить")
+        await removeDeviceFromRegistryAndRefresh(contextTarget);
+
         contextTarget = null;
         hideTreeContextMenu();
     });

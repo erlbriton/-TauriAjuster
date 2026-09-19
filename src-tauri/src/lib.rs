@@ -397,6 +397,39 @@ fn ensure_records_dir(create: bool) -> Result<String, String> {
     Ok(records_path.to_string_lossy().into_owned())
 }
 
+/// Команда: физически удалить файл с диска (безвозвратно).
+/// Используется пунктом контекстного меню "Удалить с диска".
+/// Выполняется на Rust-стороне, чтобы не зависеть от скоупов плагина fs:
+/// рабочая папка приложения может находиться где угодно.
+/// Защиты: путь не пустой, объект существует и является обычным файлом
+/// (папку или несуществующий объект команда не тронет).
+#[tauri::command]
+fn delete_file_from_disk(path: String) -> Result<(), String> {
+    eprintln!("[RUST] delete_file_from_disk: путь = '{}'", path);
+
+    // Защита от пустого пути
+    if path.trim().is_empty() {
+        return Err("Не указан путь к файлу".to_string());
+    }
+
+    let file_path = std::path::Path::new(&path);
+
+    // Проверяем, что путь указывает на существующий обычный файл
+    if !file_path.exists() {
+        return Err(format!("Файл не найден: {}", path));
+    }
+    if !file_path.is_file() {
+        return Err(format!("Путь не является файлом: {}", path));
+    }
+
+    // Удаляем файл; ошибка (например, нет прав) вернётся во фронтенд строкой
+    std::fs::remove_file(file_path)
+        .map_err(|e| format!("Не удалось удалить файл '{}': {}", path, e))?;
+
+    eprintln!("[RUST] delete_file_from_disk: файл удалён");
+    Ok(())
+}
+
 /// Возвращает None, если папка не найдена.
 #[tauri::command]
 fn get_devices_folder_path() -> Option<String> {
@@ -572,6 +605,7 @@ pub fn run() {
             open_in_default_editor,
             get_devices_folder_path,
             ensure_records_dir,
+            delete_file_from_disk,
             read_ini_file,
             open_file_location,
             open_rec_viewer
