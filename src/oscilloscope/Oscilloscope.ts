@@ -328,9 +328,10 @@ public setAppState(state: AppState): void {
     };
   }
 
-    public getBindingsContext(): BindingsContext {
+      public getBindingsContext(): BindingsContext {
     return {
       settings: this.settings,
+      archive: this.archive, // <-- ДОБАВЛЕНО
       getChannels: () => this.allChannels,
       getVisibleChannels: () => this.visibleChannels,
       pixiViews: this.pixiViews,

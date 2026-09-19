@@ -15,10 +15,12 @@ import type { PropertiesModal } from "../ui/PropertiesModal";
 import type { CommandContext } from "./OscilloscopeCommands";
 import type { IniConfig } from "../../core/ini/IniConfig.js";
 import type { AppState } from "../../core/app-state.js";
+import { Archive } from "../core/Archive"; // <-- ДОБАВЛЕН ИМПОРТ
 import { handleCommandSubmit, handleMultiplyCommand } from "./OscilloscopeCommands";
 
 export interface BindingsContext {
   settings: Settings;
+  archive: Archive; // <-- ДОБАВЛЕНО ПОЛЕ
   getChannels: () => Channel[];
   getVisibleChannels: () => Channel[];
   pixiViews: Map<string, PixiView>;
@@ -159,7 +161,13 @@ export function bindEvents(ctx: BindingsContext): void {
       ctx.settings.isPolling = false;
       
       ctx.serial?.pausePolling();
-      ctx.settings.freezeTime();
+
+      // ИСПРАВЛЕНИЕ: Явно берем максимальное время из архива и фиксируем его.
+      // Это гарантирует, что время будет соответствовать последнему реально полученному сэмплу,
+      // предотвращая визуальный сдвиг графиков при остановке опроса в Tauri.
+      const archiveMaxTime = ctx.archive.getTimeRange().max;
+      ctx.settings.setViewTime(archiveMaxTime); // Принудительно устанавливаем стабильное время
+      ctx.settings.freezeTime(); // Теперь freezeTime() зафиксирует уже корректное значение
       
       ctx.toolbar.updatePollingButtonState();
       ctx.notifyPollingStateChange(false);

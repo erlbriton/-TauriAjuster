@@ -93,12 +93,28 @@ export function loop(ctx: LoopContext, now: number): void {
   try {
     ctx.toolbar?.updateRecordTimer();
 
-    // Dirty-flag: есть ли смысл перерисовывать в этом тике
+    // Dirty-flag: есть ли смысл перерисовывать в этом тике.
+    // ВАЖНАЯ ПРАВКА (борьба с «изломом» графиков после остановки опроса):
+    // пока опрос ОСТАНОВЛЕН (!isPolling), считаем кадр грязным ВСЕГДА.
+    // Причина излома: каждая строка хранит собственную отрисовку волны и
+    // вертикальной сетки времени, фаза сетки зависит от «текущего времени»
+    // на момент отрисовки строки. Если в момент стопа какая-то строка
+    // осталась с более ранней отрисовкой (другая фаза сетки), она видна
+    // «сдвинутой» относительно соседей, а перерисовка после стопа больше
+    // не запускается (сигнатура не меняется) — излом застывает на экране.
+    // Принудительная перерисовка всех видимых строк ОДНИМ замороженным
+    // временем (freezeTime уже зафиксировал его) гарантирует согласованность:
+    // картинка визуально стоит на месте, но любые «устаревшие» строки
+    //自愈 восстанавливаются за один интервал RENDER_INTERVAL_MS.
+    // Исключение: режим просмотрщика .rec (viewerMode) — там опроса нет
+    // постоянно, и принудительная перерисовка не нужна.
     const signature =
       `${range.max}|${ctx.settings.getCurrentViewTime()}|` +
       `${ctx.settings.timeScale}|${ctx.settings.amplitudeMarkerTime}|` +
       `${ctx.settings.intervalMarker1Time}|${ctx.settings.intervalMarker2Time}`;
-    const dirty = signature !== ctx.getLastRenderSignature();
+    const dirty =
+      signature !== ctx.getLastRenderSignature() ||
+      (!ctx.settings.isPolling && !ctx.viewerMode);
     const throttled = now - ctx.getLastRenderTime() >= RENDER_INTERVAL_MS;
 
     if (dirty && throttled) {
