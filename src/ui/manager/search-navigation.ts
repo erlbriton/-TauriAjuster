@@ -80,11 +80,12 @@ export function initSearchNavigationUI(deps: SearchNavigationUIDeps): void {
   const doTreeSearch = (): void => {
     const query = (treeSearchInput?.value ?? '').trim();
     if (!query) {
-      if (treeSearchStatus) treeSearchStatus.textContent = 'Введите название места.';
+      if (treeSearchStatus) treeSearchStatus.textContent = 'Введите название места или номер устройства.';
       return;
     }
     const queryLower = query.toLowerCase();
 
+    // --- Стратегия 1: Поиск по названию места установки (location) ---
     // Уникальные имена групп ("Место установки") в порядке загрузки.
     const all = getAllDevices();
     const keys: string[] = [];
@@ -99,25 +100,64 @@ export function initSearchNavigationUI(deps: SearchNavigationUIDeps): void {
       keys.find((k) => k.toLowerCase().startsWith(queryLower)) ??
       keys.find((k) => k.toLowerCase().includes(queryLower));
 
-    if (!matchedKey) {
-      if (treeSearchStatus) treeSearchStatus.textContent = `Не найдено: ${query}`;
+    if (matchedKey) {
+      // Нашли по location — переключаем группировку, раскрываем группу, выделяем первый файл
+      setTreeGroupMode('location');
+      renderDeviceTree();
+
+      const detailsList = document.querySelectorAll('details.tree-location');
+      for (const details of detailsList) {
+        const summary = details.querySelector('summary');
+        if ((summary?.textContent ?? '').trim() !== matchedKey) continue;
+        (details as HTMLDetailsElement).open = true;
+        const firstLeaf = details.querySelector<HTMLLIElement>('.tree-id-item.is-leaf');
+        if (firstLeaf) firstLeaf.click();
+        break;
+      }
+      hideTreeSearch();
       return;
     }
 
-    setTreeGroupMode('location');
-    renderDeviceTree();
+    // --- Стратегия 2: Поиск по ID устройства (из секции [DEVICE] INI-файла) ---
+    // Если по location не нашли — ищем устройство напрямую по его ID.
+    // Ищем точное совпадение, затем начало, затем вхождение (регистронезависимо).
+    const matchedDevice =
+      all.find((d) => d.id.toLowerCase() === queryLower) ??
+      all.find((d) => d.id.toLowerCase().startsWith(queryLower)) ??
+      all.find((d) => d.id.toLowerCase().includes(queryLower));
 
-    // Раскрываем найденную группу и выделяем первый файл в ней.
-    const detailsList = document.querySelectorAll('details.tree-location');
-    for (const details of detailsList) {
-      const summary = details.querySelector('summary');
-      if ((summary?.textContent ?? '').trim() !== matchedKey) continue;
-      (details as HTMLDetailsElement).open = true;
-      const firstLeaf = details.querySelector<HTMLLIElement>('.tree-id-item.is-leaf');
-      if (firstLeaf) firstLeaf.click();
-      break;
+    if (matchedDevice) {
+      // Нашли устройство по ID — переключаем группировку на location,
+      // раскрываем группу, в которой оно находится, и выделяем его.
+      setTreeGroupMode('location');
+      renderDeviceTree();
+
+      // Определяем, в какой группе location находится это устройство
+      const deviceLocation = getDeviceGroupKey(matchedDevice, 'location');
+
+      // Раскрываем нужную группу и выделяем файл этого устройства
+      const detailsList = document.querySelectorAll('details.tree-location');
+      for (const details of detailsList) {
+        const summary = details.querySelector('summary');
+        if ((summary?.textContent ?? '').trim() !== deviceLocation) continue;
+        (details as HTMLDetailsElement).open = true;
+        
+        // Ищем внутри группы именно этот файл (по data-device-id)
+        const leaf = details.querySelector<HTMLLIElement>(
+          `.tree-id-item.is-leaf[data-device-id="${CSS.escape(matchedDevice.id)}"]`
+        );
+        if (leaf) {
+          leaf.click();
+          leaf.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        break;
+      }
+      hideTreeSearch();
+      return;
     }
-    hideTreeSearch();
+
+    // --- Ничего не нашли ни по location, ни по ID ---
+    if (treeSearchStatus) treeSearchStatus.textContent = `Не найдено: ${query}`;
   };
 
   const openTreeSearchOverlay = (): void => {

@@ -76,7 +76,7 @@ function showInfoWindow(title: string, text: string): void {
 export function showAboutWindow(): void {
     showInfoWindow(
         'О программе',
-        'WEB Ajuster v0.1\ninfo@intmash.ru   www.intmash.ru\nБердск 2026',
+        'Tauri Ajuster v0.1\ninfo@intmash.ru   www.intmash.ru\nБердск 2026',
     );
 }
 
