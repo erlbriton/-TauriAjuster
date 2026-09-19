@@ -5,10 +5,35 @@
 
 // Исправленные импорты для Tauri v2 (используем плагины напрямую)
 import { open } from '@tauri-apps/plugin-dialog';
-import { readTextFile, readDir } from '@tauri-apps/plugin-fs';
+// ИСПРАВЛЕНО: readTextFile → readFile (читаем СЫРЫЕ байты, чтобы правильно декодировать windows-1251).
+// readTextFile всегда декодирует как UTF-8, из-за чего кириллица в INI превращалась в кракозябры.
+import { readFile, readDir } from '@tauri-apps/plugin-fs';
 
 import type { AppState } from '../core/app-state.js';
 import { processSingleFileContent } from './file-loader.js';
+// ИСПРАВЛЕНО: добавлен импорт декодера с автоопределением кодировки.
+// Он сначала пробует строгий UTF-8, затем строгий windows-1251,
+// и в крайнем случае — windows-1251 с заменой невалидных байтов.
+import { decodeTextBuffer } from './textFileReader.js';
+
+/**
+ * Читает файл как массив байтов и декодирует с автоопределением кодировки.
+ * Используется вместо readTextFile, который принудительно читает как UTF-8.
+ * @param path Полный путь к файлу в файловой системе.
+ * @returns Декодированная строка с корректной кириллицей.
+ */
+async function readFileWithAutoEncoding(path: string): Promise<string> {
+  // readFile возвращает Uint8Array (сырые байты без декодирования).
+  // TextDecoder принимает ArrayBufferView, но decodeTextBuffer ожидает ArrayBuffer,
+  // поэтому извлекаем чистый ArrayBuffer из Uint8Array с учётом смещения
+  // (на случай, если байты лежат в shared ArrayBuffer).
+  const bytes = await readFile(path);
+  const buffer = bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength
+  );
+  return decodeTextBuffer(buffer);
+}
 
 /**
  * Открывает диалог выбора одного или нескольких INI-файлов.
@@ -40,8 +65,9 @@ export async function openIniFileTauri(appState: AppState): Promise<void> {
       if (typeof path !== 'string') continue;
 
       try {
-        // Читаем содержимое файла через Tauri FS
-        const content = await readTextFile(path);
+        // ИСПРАВЛЕНО: читаем сырые байты и декодируем с автоопределением кодировки.
+        // Раньше readTextFile читал как UTF-8, из-за чего кириллица превращалась в кракозябры.
+        const content = await readFileWithAutoEncoding(path);
         
         // Извлекаем имя файла из полного пути
         const fileName = path.split('/').pop()?.split('\\').pop() || 'unknown.ini';
@@ -96,7 +122,8 @@ export async function openIniFolderTauri(appState: AppState): Promise<void> {
           const fullPath = `${selectedDir}/${entry.name}`; 
           
           try {
-            const content = await readTextFile(fullPath);
+            // ИСПРАВЛЕНО: читаем сырые байты и декодируем с автоопределением кодировки.
+            const content = await readFileWithAutoEncoding(fullPath);
             const fakeFile = new File([content], entry.name, { type: 'text/plain' });
             
             // Передаем undefined вместо null
