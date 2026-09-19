@@ -58,6 +58,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Для остального кода (осциллограф, serialManager) он выглядит
         // точно так же, как старый браузерный порт.
         const serial = new TauriSerialPort();
+        // Сохраняем глобально для закрытия при выходе из приложения
+        (window as unknown as { serialPort?: TauriSerialPort }).serialPort = serial;
         const parser = new ModbusParser();
 
         // Связываем кнопку Стоп/Пуск осциллографа с глобальным состоянием опроса

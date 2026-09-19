@@ -280,6 +280,14 @@ export function renderDeviceTree(): void {
         liElement.style.textOverflow = 'ellipsis';
 
         liElement.addEventListener('click', async () => {
+            // РАННИЙ ВЫХОД: Если файл уже активен (подсвечен), ничего не делаем.
+            // Это предотвращает повторный запуск одноразового опроса Modbus
+            // (который генерирует событие app:ini-file-loaded ниже) и исключает
+            // ошибку "Контроллер не отвечает" при повторных кликах по активному файлу.
+            if (liElement.classList.contains('is-selected')) {
+                return;
+            }
+
             // Если есть несохранённые изменения — спросить перед переключением
             if (hasAnyDirty()) {
                 const save = await showConfirmDialog('Записать изменения на диск?');

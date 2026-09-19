@@ -13,6 +13,7 @@ import { showIdModal, showCompactError } from '../ui.js';
 import { showAddressDialog } from '../confirm-dialog.js';
 import { hasAnyDirty } from '../../ini-manager/dirty-tracker.js';
 
+
 export interface CommunicationSettingsUIDeps {
   serial: ISerialPort;
   appState: AppState;
@@ -141,8 +142,29 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
   // Защита от закрытия вкладки при несохранённых изменениях
   window.addEventListener('beforeunload', (e: BeforeUnloadEvent) => {
     if (hasAnyDirty()) {
+      // По современному стандарту для запроса подтверждения выхода достаточно
+      // отменить событие через preventDefault() — именно отмена события заставляет
+      // браузер/веб-вью показать диалог «Покинуть страницу?».
+      // Устаревшее свойство returnValue (легаси-алиас из старых браузеров)
+      // больше НЕ используется: оно помечено @deprecated в lib.dom.d.ts и
+      // давало предупреждение TS6385 в редакторе.
       e.preventDefault();
-      e.returnValue = '';
+    }
+
+    // Закрываем COM-порт при выходе из приложения (вызывает close_serial_port на Rust-стороне).
+    // ВАЖНО: используем интерфейс ISerialPort (контракт порта), а не конкретный класс
+    // TauriSerialPort, по двум причинам:
+    //   1) метод release() объявлен именно в контракте ISerialPort (строка 50 ISerialPort.ts),
+    //      то есть доступен любой реализации порта (браузерной и нативной);
+    //   2) тип ISerialPort в этом файле УЖЕ импортирован (первая строка импортов),
+    //      а TauriSerialPort — нет, из-за чего и возникала ошибка TS2552.
+    const serialPort = (window as unknown as { serialPort?: ISerialPort }).serialPort;
+    if (serialPort) {
+      try {
+        serialPort.release();
+      } catch (err) {
+        console.error('[beforeunload] Ошибка закрытия порта:', err);
+      }
     }
   });
 

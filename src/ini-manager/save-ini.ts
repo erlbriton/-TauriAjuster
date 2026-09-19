@@ -4,12 +4,13 @@
 
 import { showIdModal, populateDeviceForm } from '../ui/ui.js';
 import { showConfirmDialog } from '../ui/confirm-dialog.js';
-import { getCurrentIniFileHandle, getFileStore } from './file-loader.js';
+import { getCurrentIniFileHandle, getFileStore, getCurrentIniFilePath } from './file-loader.js';
 import { updateDeviceInRegistry } from './tree-core.js';
 import type { RawIniConfig } from './tree-core.js';
 import { IniParser, IniConfig } from '../core/ini/index.js';
 import type { AppState } from '../core/app-state.js';
 import { clearAllDirty } from './dirty-tracker.js';
+
 
 // ─────────────────────────────────────────────
 // Строгая типизация для File System Access API (без any)
@@ -107,13 +108,16 @@ function hasBannerKeyInOriginal(originalText: string, key: string): boolean {
 export async function saveIniChanges(appState: AppState): Promise<boolean> {
   const original = appState.currentIniContent;
   let fileHandle = getCurrentIniFileHandle();
+  const filePath = getCurrentIniFilePath();
+  const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
 
   if (!original) {
     showIdModal('Нет данных для сохранения');
     return false;
   }
 
-  if (!fileHandle) {
+  // В Tauri режиме fileHandle всегда null, используем filePath
+  if (!isTauri && !fileHandle) {
     try {
       // Исправление TS2352: безопасное приведение типа через unknown
       const win = window as unknown as WindowWithFileSystem;
@@ -136,9 +140,13 @@ export async function saveIniChanges(appState: AppState): Promise<boolean> {
     }
   }
 
-  // Явная проверка для компилятора, что fileHandle не является null
-  if (!fileHandle) {
+  // Явная проверка: в браузере нужен fileHandle, в Tauri - filePath
+  if (!isTauri && !fileHandle) {
     showIdModal('Ошибка: не удалось получить дескриптор файла');
+    return false;
+  }
+  if (isTauri && !filePath) {
+    showIdModal('Ошибка: не известен путь к файлу в Tauri');
     return false;
   }
 
@@ -290,9 +298,18 @@ export async function saveIniChanges(appState: AppState): Promise<boolean> {
   const newContent = lines.join(sep);
 
   try {
-    const writable = await fileHandle.createWritable();
-    await writable.write(encodeWindows1251(newContent));
-    await writable.close();
+    if (isTauri && filePath) {
+      // Нативное сохранение через Tauri FS
+      const { writeFile } = await import('@tauri-apps/plugin-fs');
+      // encodeWindows1251 определена в этом же файле и возвращает Uint8Array, что идеально для writeFile
+      const encodedContent = encodeWindows1251(newContent);
+      await writeFile(filePath, encodedContent);
+    } else if (fileHandle) {
+      // Браузерное сохранение через File System Access API
+      const writable = await fileHandle.createWritable();
+      await writable.write(encodeWindows1251(newContent));
+      await writable.close();
+    }
 
     appState.currentIniContent = newContent;
     clearAllDirty();
@@ -301,7 +318,8 @@ export async function saveIniChanges(appState: AppState): Promise<boolean> {
     const store = getFileStore();
     let matchingEntry = null;
     for (const entry of store.values()) {
-      if (entry.handle === fileHandle) {
+      // В Tauri ищем по пути, в браузере - по handle
+      if ((isTauri && entry.path === filePath) || (!isTauri && entry.handle === fileHandle)) {
         matchingEntry = entry;
         break;
       }

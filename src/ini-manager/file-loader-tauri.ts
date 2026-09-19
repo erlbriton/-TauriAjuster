@@ -76,8 +76,9 @@ export async function openIniFileTauri(appState: AppState): Promise<void> {
         const fakeFile = new File([content], fileName, { type: 'text/plain' });
         
         // Обрабатываем файл. 
-        // ВАЖНО: передаем undefined вместо null для последнего аргумента (FileSystemFileHandle)
-        await processSingleFileContent(content, fileName, appState, fakeFile, undefined);
+        // ВАЖНО: передаем undefined для sourceHandle и parentHandle, но ОБЯЗАТЕЛЬНО передаем path!
+        // Это позволит позже сохранить файл именно по этому пути в Tauri.
+        await processSingleFileContent(content, fileName, appState, fakeFile, undefined, undefined, path);
         
         console.log(`[TauriLoader] Файл успешно загружен: ${path}`);
       } catch (err) {
@@ -126,8 +127,8 @@ export async function openIniFolderTauri(appState: AppState): Promise<void> {
             const content = await readFileWithAutoEncoding(fullPath);
             const fakeFile = new File([content], entry.name, { type: 'text/plain' });
             
-            // Передаем undefined вместо null
-            await processSingleFileContent(content, entry.name, appState, fakeFile, undefined);
+            // Передаем undefined для handle, но ОБЯЗАТЕЛЬНО передаем fullPath!
+            await processSingleFileContent(content, entry.name, appState, fakeFile, undefined, undefined, fullPath);
             loadedCount++;
           } catch (err) {
             console.error(`Ошибка чтения ${entry.name}:`, err);

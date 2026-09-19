@@ -105,15 +105,36 @@ export class Recorder {
       console.log(`[Recorder] Первые 10 каналов БЕЗ данных:`, withoutData.slice(0, 10).map(s => s.id));
     }
 
-    const base = supported[0];
+    // Находим каналы, у которых ЕСТЬ данные в архиве
+    const channelsWithData = supported.filter((ch) => {
+      const samples = this.archive.getAllSamples(ch.id);
+      return samples.length > 0;
+    });
+
+    if (channelsWithData.length === 0) {
+      throw new Error('Нет данных ни для одного канала в архиве');
+    }
+
+    // Берём первый канал С ДАННЫМИ как базовый (а не просто первый из списка)
+    const base = channelsWithData[0];
     const allBase = this.archive.getAllSamples(base.id);
 
     let filtered: Sample[] = allBase;
     if (startTime !== null && endTime !== null) {
       filtered = allBase.filter((s) => s.time >= startTime && s.time <= endTime);
     }
+    
     if (filtered.length === 0) {
-      throw new Error('Нет данных в выбранном интервале времени');
+      // Детальная диагностика: показываем, что именно не так
+      const timeRange = startTime !== null && endTime !== null
+        ? ` (${new Date(startTime).toISOString()} - ${new Date(endTime).toISOString()})`
+        : ' (весь буфер)';
+      const totalSamples = allBase.length;
+      throw new Error(
+        `Нет данных в выбранном интервале времени${timeRange}. ` +
+        `Всего сэмплов для канала "${base.name}": ${totalSamples}. ` +
+        `Проверьте, что маркеры установлены правильно и данные были записаны.`
+      );
     }
 
     const timestamps = filtered.map((s) => s.time);

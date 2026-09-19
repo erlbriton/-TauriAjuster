@@ -344,6 +344,59 @@ fn open_in_default_editor(path: String) -> Result<(), String> {
 }
 
 /// Команда: вернуть абсолютный путь к папке Devices рядом с исполняемым файлом.
+/// Проверяет существование папки "Records" рядом с исполняемым файлом.
+/// Если папки нет и create == true — создаёт её.
+/// Возвращает абсолютный путь к папке Records или ошибку.
+///
+/// Рабочая папка определяется так:
+/// - Если установлена переменная окружения APPIMAGE (AppImage в Linux) —
+///   берём родительскую директорию файла .AppImage (это папка, куда пользователь положил приложение).
+/// - Иначе — берём родительскую директорию текущего исполняемого файла (exe/bin).
+/// Это позволяет приложению работать одинаково и как портативному (из любой папки),
+/// и как установленному через пакет (из системной директории).
+#[tauri::command]
+fn ensure_records_dir(create: bool) -> Result<String, String> {
+    // Определяем рабочую папку: учитываем AppImage и обычный exe/bin
+    let exe_dir = if let Ok(appimage_path) = std::env::var("APPIMAGE") {
+        // AppImage: переменная APPIMAGE содержит путь к самому файлу .AppImage
+        // Берём его родительскую директорию (папку, где лежит .AppImage)
+        std::path::PathBuf::from(appimage_path)
+            .parent()
+            .ok_or_else(|| "Не удалось определить родительскую директорию AppImage".to_string())?
+            .to_path_buf()
+    } else {
+        // Обычный exe/bin: берём родительскую директорию текущего исполняемого файла
+        std::env::current_exe()
+            .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {}", e))?
+            .parent()
+            .ok_or_else(|| "Не удалось определить родительскую директорию исполняемого файла".to_string())?
+            .to_path_buf()
+    };
+
+    // Корректно присоединяем подпапку "Records" через Path::join
+    // (это решает проблему склейки путей без разделителя, которая была в TypeScript)
+    let records_path = exe_dir.join("Records");
+
+    // Проверяем существование
+    if !records_path.exists() {
+        if create {
+            // Пользователь согласился создать папку — создаём
+            std::fs::create_dir_all(&records_path).map_err(|e| {
+                format!(
+                    "Не удалось создать папку '{}': {}",
+                    records_path.display(),
+                    e
+                )
+            })?;
+        } else {
+            // Папки нет и создавать не нужно — возвращаем специальную ошибку
+            return Err("RECORDS_DIR_NOT_FOUND".to_string());
+        }
+    }
+
+    Ok(records_path.to_string_lossy().into_owned())
+}
+
 /// Возвращает None, если папка не найдена.
 #[tauri::command]
 fn get_devices_folder_path() -> Option<String> {
@@ -518,6 +571,7 @@ pub fn run() {
             close_serial_port,
             open_in_default_editor,
             get_devices_folder_path,
+            ensure_records_dir,
             read_ini_file,
             open_file_location,
             open_rec_viewer

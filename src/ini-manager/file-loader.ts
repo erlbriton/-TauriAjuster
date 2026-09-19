@@ -46,9 +46,20 @@ export interface StoredFileEntry {
 const fileStore: Map<string, StoredFileEntry> = new Map();
 
 /** Возвращает хэндл файла, с которым сейчас работает аджастер */
+// Добавляем переменную для хранения пути в Tauri
+let currentIniPath: string | null = null;
+
 export function getCurrentIniFileHandle(): FileSystemFileHandle | null {
   if (!currentIniFileName) return null;
   return iniFileHandles.get(currentIniFileName) ?? null;
+}
+
+/**
+ * Возвращает абсолютный путь к текущему INI-файлу на диске.
+ * Используется в нативном режиме (Tauri) для сохранения изменений.
+ */
+export function getCurrentIniFilePath(): string | null {
+  return currentIniPath;
 }
 
 
@@ -76,6 +87,7 @@ export async function processSingleFileContent(
     filePath?: string
 ): Promise<void> {
   currentIniFileName = fileName;
+  currentIniPath = filePath ?? null; // Сохраняем путь для Tauri
   try {
     if (!content) {
       throw new Error('Файл пуст');
