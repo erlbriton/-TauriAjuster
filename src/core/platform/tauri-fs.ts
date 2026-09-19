@@ -113,17 +113,19 @@ export class TauriFileSaver implements IFileSaver {
    * @param filename Предлагаемое имя файла.
    * @param data Массив байтов (Uint8Array).
    * @param mimeType MIME-тип (не используется в Tauri-режиме, сохранён для совместимости интерфейса).
+   * @returns Абсолютный путь к записанному файлу или null, если записи не произошло
+   *          (пользователь отказался создавать папку Records).
    */
   public async saveBinaryFile(
     filename: string,
     data: Uint8Array,
     mimeType: string = 'application/octet-stream'
-  ): Promise<void> {
+  ): Promise<string | null> {
     // Получаем путь к папке Records (создаём при необходимости)
     const recordsDir = await this.getOrCreateRecordsDir();
     if (!recordsDir) {
       // Пользователь отказался создавать папку — тихо выходим
-      return;
+      return null;
     }
 
     // Формируем полный путь к файлу
@@ -133,6 +135,7 @@ export class TauriFileSaver implements IFileSaver {
       // Записываем файл молча, без диалога
       await writeFile(filePath, data);
       console.log(`[TauriFileSaver] Бинарный файл успешно сохранен: ${filePath}`);
+      return filePath;
     } catch (error) {
       console.error('[TauriFileSaver] Ошибка при записи файла:', error);
       throw new Error(`Не удалось сохранить файл: ${error instanceof Error ? error.message : String(error)}`);

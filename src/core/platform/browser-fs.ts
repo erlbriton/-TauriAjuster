@@ -31,7 +31,7 @@ export class BrowserFileSaver implements IFileSaver {
     filename: string,
     data: Uint8Array,
     mimeType: string = 'application/octet-stream'
-  ): Promise<void> {
+  ): Promise<string | null> {
     // Копируем данные в НОВЫЙ ArrayBuffer, чтобы тип стал
     // Uint8Array<ArrayBuffer> — этого требует Blob в TypeScript 5.7+
     const safe = new Uint8Array(data);
@@ -39,6 +39,7 @@ export class BrowserFileSaver implements IFileSaver {
     // Пытаемся открыть системный диалог "Сохранить как"
     const w = window as unknown as {
       showSaveFilePicker?: (options: unknown) => Promise<{
+        name: string;
         createWritable(): Promise<{
           write(d: Uint8Array): Promise<void>;
           close(): Promise<void>;
@@ -60,17 +61,20 @@ export class BrowserFileSaver implements IFileSaver {
         const writable = await handle.createWritable();
         await writable.write(safe);
         await writable.close();
-        return;
+        // Возвращаем имя файла, выбранное пользователем в диалоге
+        return handle.name;
       } catch (err) {
         // Пользователь отменил диалог — тихо выходим
         if (err instanceof DOMException && err.name === 'AbortError') {
-          return;
+          return null;
         }
         // Иначе падаем в fallback ниже
       }
     }
 
-    // Fallback: обычное скачивание
+    // Fallback: обычное скачивание через <a download>.
+    // В этом режиме путь сохранения недоступен (браузер сам выбирает
+    // папку загрузок), возвращаем только имя файла.
     const blob = new Blob([safe], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -80,6 +84,7 @@ export class BrowserFileSaver implements IFileSaver {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+    return filename;
   }
 }
 

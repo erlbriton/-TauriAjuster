@@ -41,9 +41,14 @@ export interface ISerialPortPlatform {
  * Контракт сохранения файлов (CSV, INI, REC).
  * Браузер:  Blob + URL.createObjectURL + <a download>
  *           или showSaveFilePicker (диалог "Сохранить как")
- * Нативный: диалог сохранения через FS-плагин
+ * Нативный: молчаливая запись в папку "Records" рядом с исполняемым файлом
+ *
+ * saveBinaryFile возвращает абсолютный путь к записанному файлу при успехе
+ * (чтобы вызывающий код мог показать пользователю подтверждение записи)
+ * или null, если записи не произошло (пользователь отменил диалог в браузере
+ * или отказался создавать папку Records в Tauri).
  */
 export interface IFileSaver {
   saveTextFile(filename: string, content: string, mimeType?: string): Promise<void>;
-  saveBinaryFile(filename: string, data: Uint8Array, mimeType?: string): Promise<void>;
+  saveBinaryFile(filename: string, data: Uint8Array, mimeType?: string): Promise<string | null>;
 }

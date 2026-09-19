@@ -84,7 +84,7 @@ export class Recorder {
     startTime: number | null,
     endTime: number | null,
     device: IniDeviceInfo | null,
-  ): Promise<void> {
+  ): Promise<string | null> {
     const supported = channels.filter((ch) => mapToRecDataType(ch.dataType) !== null);
     if (supported.length === 0) {
       throw new Error('Нет параметров с типами TWORD/TFloat/TBit/TInteger для записи .rec');
@@ -207,7 +207,11 @@ export class Recorder {
       `oscilloscope_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
       `_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.rec`;
 
-    await this.fileSaver.saveBinaryFile(filename, bytes, 'application/octet-stream');
+    // Возвращаем путь к записанному файлу (или null, если записи не было).
+    // Это позволяет вызывающему коду показать пользователю подтверждение
+    // только в случае успешной записи.
+    const savedPath = await this.fileSaver.saveBinaryFile(filename, bytes, 'application/octet-stream');
+    return savedPath;
   }
 
   public exportCSV(channels: Channel[]): string {

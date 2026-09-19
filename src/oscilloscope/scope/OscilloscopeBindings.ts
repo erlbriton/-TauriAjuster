@@ -268,8 +268,16 @@ export function bindEvents(ctx: BindingsContext): void {
 
     void ctx.recorder
       ?.exportREC(allChannels, startTime, endTime, deviceInfo)
-      .then(() => {
-        console.log("[Bindings] Запись выделенного участка .rec завершена успешно");
+      .then((savedPath) => {
+        if (savedPath) {
+          // Запись успешна — показываем подтверждение с путём файла
+          console.log(`[Bindings] Запись выделенного участка .rec завершена успешно: ${savedPath}`);
+          alert(`Запись успешно сохранена:\n\n${savedPath}`);
+        } else {
+          // Записи не было (пользователь отменил) — тихо выходим,
+          // без каких-либо сообщений
+          console.log("[Bindings] Запись выделенного участка .rec отменена пользователем");
+        }
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
@@ -295,8 +303,16 @@ export function bindEvents(ctx: BindingsContext): void {
     // null, null — означает запись всего буфера
     void ctx.recorder
       ?.exportREC(allChannels, null, null, deviceInfo)
-      .then(() => {
-        console.log("[Bindings] Запись всего буфера .rec завершена успешно");
+      .then((savedPath) => {
+        if (savedPath) {
+          // Запись успешна — показываем подтверждение с путём файла
+          console.log(`[Bindings] Запись всего буфера .rec завершена успешно: ${savedPath}`);
+          alert(`Запись успешно сохранена:\n\n${savedPath}`);
+        } else {
+          // Записи не было (пользователь отменил) — тихо выходим,
+          // без каких-либо сообщений
+          console.log("[Bindings] Запись всего буфера .rec отменена пользователем");
+        }
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
