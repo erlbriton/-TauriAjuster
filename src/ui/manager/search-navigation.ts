@@ -242,9 +242,13 @@ export function initSearchNavigationUI(deps: SearchNavigationUIDeps): void {
   initBackupUI();
   initParamPropertiesUI();
 
-  // Установка колбэков для загрузки файлов (из новых устройств или резервных копий)
-  setNewDeviceAddToLoaded((content, fileName, file, handle) =>
-    processSingleFileContent(content, fileName, appState, file, handle)
+  // Установка колбэков для загрузки файлов (из новых устройств или резервных копий).
+  // Пятый параметр `path` — абсолютный путь к файлу на диске в нативном режиме (Tauri).
+  // В браузере он всегда undefined, в Tauri приходит из new-device-ui после
+  // успешной записи файла в папку Devices. Через processSingleFileContent
+  // путь попадает в currentIniPath (см. file-loader.ts) и используется save-ini.ts.
+  setNewDeviceAddToLoaded((content, fileName, file, handle, path) =>
+    processSingleFileContent(content, fileName, appState, file, handle, undefined, path)
   );
   
   setBackupLoadFn((content, fileName, file, handle) => 

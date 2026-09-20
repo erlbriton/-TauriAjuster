@@ -5,7 +5,8 @@
 // Действия кнопок подключаются следующим шагом — сейчас заглушки.
 
 import { showBackupWindow } from './backup-ui.js';
-import { handleAddToBaseGeneric, refreshTemplateSelects } from './new-device-ui.js';
+import { refreshTemplateSelects } from './new-device-ui.js';
+import { handleAddToBaseGeneric } from './new-device-add.js';
 
 /** Текущая информация об устройстве с другой версией ПО */
 let currentInfo: FwUpdateInfo | null = null;
