@@ -77,6 +77,51 @@ function sanitizeFileName(name: string): string {
     return name.replace(/[\\/:*?"<>|!]/g, '_');
 }
 
+/**
+ * Вычисляет имя подпапки внутри Devices для нового или обновляемого INI.
+ *
+ * Правила (по согласованию с заказчиком):
+ *  1. Если Location задан — имя папки = Location (с санитизацией).
+ *     Пример: Location=Огонь → папка "Огонь".
+ *  2. Если Location пустой — берём токены ID-строки между серийным номером
+ *     и датой прошивки. Это тип устройства и (если есть) версия.
+ *     Пример: "00004000 DExS.AVS v1.10.6.3 18.07.2022 www.intmash.ru"
+ *       → "DExS.AVS v1.10.6.3"
+ *     Пример: "00001011 DExS.AVK 18.07.2022 www.intmash.ru"
+ *       → "DExS.AVK"
+ *  3. Если ни Location, ни токенов из ID не получилось — возвращаем null.
+ *     Вызывающий код должен показать ошибку и НЕ сохранять файл.
+ *
+ * Функция чистая (только вычисление). Создание самой папки — отдельная
+ * Rust-команда ensure_device_subdir.
+ */
+function resolveDeviceSubdirName(location: string, idText: string): string | null {
+    // 1. Location задан — используем его.
+    const loc = location.trim();
+    if (loc) {
+        return sanitizeFileName(loc);
+    }
+
+    // 2. Location пустой — извлекаем токены из ID-строки.
+    //    Формат: "<серийник> <тип> [<версия>] <дата> [<URL>]".
+    //    Идём от второго токена к концу, пока не встретим дату или URL.
+    const tokens = idText.trim().split(/\s+/);
+    if (tokens.length < 2) return null;
+
+    const middle: string[] = [];
+    for (let i = 1; i < tokens.length; i++) {
+        const t = tokens[i];
+        // Дата вида dd.mm.yyyy — дальше начинается «хвост», останавливаемся.
+        if (/^\d{2}\.\d{2}\.\d{4}$/.test(t)) break;
+        // URL (www.* или что-то похожее на домен .ru/.com/.net/.org) — тоже стоп.
+        if (t.includes('www.') || /^[\w.-]+\.(ru|com|net|org)$/i.test(t)) break;
+        middle.push(t);
+    }
+    if (middle.length === 0) return null;
+
+    return sanitizeFileName(middle.join(' '));
+}
+
 /** Общая логика кнопки "Добавить устройство в базу" для обоих окон. */
 export async function handleAddToBaseGeneric(src: AddToBaseSource): Promise<void> {
     const select = document.getElementById(src.templateSelectId) as HTMLSelectElement | null;
@@ -173,13 +218,29 @@ export async function handleAddToBaseGeneric(src: AddToBaseSource): Promise<void
         const { invoke } = await import('@tauri-apps/api/core');
         const { writeFile } = await import('@tauri-apps/plugin-fs');
 
-        const devicesPath = await invoke<string | null>('get_devices_folder_path');
-        if (!devicesPath) {
-            showIdModal('Не удалось найти папку Devices рядом с приложением. Файл не сохранён.');
+        // Имя подпапки внутри Devices: Location, либо токены ID-строки
+        // между серийником и датой (см. resolveDeviceSubdirName выше).
+        // Если ни то, ни другое не дало результата — файл не сохраняем.
+        const subdirName = resolveDeviceSubdirName(location, idText);
+        if (!subdirName) {
+            showIdModal('Не удалось определить имя папки для устройства: не задан Location и не удалось извлечь тип из строки ID. Файл не сохранён.');
             return;
         }
 
-        const fullPath = `${devicesPath}/${fileName}`;
+        // Создаём (или находим) подпапку внутри Devices.
+        // Rust-команда сама определяет путь к Devices рядом с exe
+        // и создаёт подпапку, если её ещё нет.
+        let subdirPath: string;
+        try {
+            subdirPath = await invoke<string>('ensure_device_subdir', { name: subdirName });
+        } catch (err) {
+            console.error('[new-device] Tauri: ошибка создания подпапки Devices:', err);
+            const msg = err instanceof Error ? err.message : String(err);
+            showIdModal(`Не удалось создать папку "${subdirName}": ${msg}`);
+            return;
+        }
+
+        const fullPath = `${subdirPath}/${fileName}`;
         try {
             await writeFile(fullPath, bytes);
             console.log(`[new-device] Tauri: файл записан в ${fullPath}`);

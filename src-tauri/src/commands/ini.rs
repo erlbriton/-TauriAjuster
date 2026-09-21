@@ -116,3 +116,254 @@ pub fn read_ini_file(path: String) -> Result<Vec<u8>, String> {
     eprintln!("[RUST] read_ini_file: прочитано {} байт", bytes.len());
     Ok(bytes)
 }
+
+/// Команда: вернуть путь к подпапке внутри Devices и создать её при необходимости.
+///
+/// Структура базы: рядом с exe лежит папка Devices/, а внутри неё — подпапки
+/// по локациям (имя = Location из INI) или, если Location нет, по версии
+/// прошивки (например, "DExS.AVS v1.10.6.3"). INI-файлы лежат в этих
+/// подпапках, не в корне Devices.
+///
+/// Имя подпапки приходит уже санитизированным с TS-стороны
+/// (недопустимые для ОС символы заменены), поэтому здесь только проверка
+/// на пустоту и защита от попыток выхода из папки Devices (..).
+#[tauri::command]
+pub fn ensure_device_subdir(name: String) -> Result<String, String> {
+    eprintln!("[RUST] ensure_device_subdir: имя подпапки = '{}'", name);
+
+    // Защита от пустого имени и попыток выйти за пределы Devices (..)
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("Пустое имя подпапки для Devices".to_string());
+    }
+    if trimmed == "." || trimmed == ".." || trimmed.contains('/') || trimmed.contains('\\') {
+        return Err(format!(
+            "Недопустимое имя подпапки для Devices: '{}'",
+            name
+        ));
+    }
+
+    // Определяем папку Devices рядом с exe (та же логика, что в scan_devices_folder
+    // и get_devices_folder_path, чтобы не было расхождений).
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {}", e))?;
+    let exe_dir = exe_path
+        .parent()
+        .ok_or_else(|| "У пути к исполняемому файлу нет родительской папки".to_string())?;
+    let devices_dir = exe_dir.join("Devices");
+
+    // Папки Devices нет — это ошибка, создавать её здесь не должны:
+    // Devices — корень базы, он появляется либо при первом запуске,
+    // либо создаётся пользователем. Молча плодить корень базы нежелательно.
+    if !devices_dir.is_dir() {
+        return Err(format!(
+            "Папка Devices не найдена рядом с приложением: {}",
+            devices_dir.display()
+        ));
+    }
+
+    let subdir = devices_dir.join(trimmed);
+    if !subdir.is_dir() {
+        fs::create_dir_all(&subdir).map_err(|e| {
+            format!(
+                "Не удалось создать подпапку '{}': {}",
+                subdir.display(),
+                e
+            )
+        })?;
+        eprintln!(
+            "[RUST] ensure_device_subdir: создана подпапка '{}'",
+            subdir.display()
+        );
+    }
+
+    Ok(subdir.to_string_lossy().into_owned())
+}
+
+/// Команда: вернуть путь к папке BackUp рядом с exe (сосед Devices).
+///
+/// Логика работы:
+///   - если папка BackUp уже существует — вернуть её путь;
+///   - если папки нет и create = false — вернуть специальную ошибку
+///     "BACKUP_DIR_NOT_FOUND" (TS-сторона её распознаёт и спрашивает
+///     у пользователя, создавать ли папку);
+///   - если папки нет и create = true — создать и вернуть путь.
+///
+/// Структура базы:
+///   <рядом с exe>/
+///     Devices/          ← INI-файлы по подпапкам (Location / версия прошивки)
+///     BackUp/           ← старые INI, перемещённые при обновлении прошивки
+#[tauri::command]
+pub fn ensure_backup_dir(create: bool) -> Result<String, String> {
+    eprintln!("[RUST] ensure_backup_dir: create = {}", create);
+
+    // Путь к BackUp — рядом с exe, сосед Devices. Та же логика, что в
+    // scan_devices_folder и get_devices_folder_path, чтобы папки гарантированно
+    // лежали на одном уровне.
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {}", e))?;
+    let exe_dir = exe_path
+        .parent()
+        .ok_or_else(|| "У пути к исполняемому файлу нет родительской папки".to_string())?;
+    let backup_dir = exe_dir.join("BackUp");
+
+    if !backup_dir.is_dir() {
+        if create {
+            fs::create_dir_all(&backup_dir).map_err(|e| {
+                format!(
+                    "Не удалось создать папку '{}': {}",
+                    backup_dir.display(),
+                    e
+                )
+            })?;
+            eprintln!(
+                "[RUST] ensure_backup_dir: создана папка '{}'",
+                backup_dir.display()
+            );
+        } else {
+            // Специальная ошибка: TS-сторона её распознаёт и предлагает
+            // пользователю создать папку. Обычное сообщение об ошибке
+            // не подходит — оно показывается как сбой, а тут штатная ситуация.
+            return Err("BACKUP_DIR_NOT_FOUND".to_string());
+        }
+    }
+
+    Ok(backup_dir.to_string_lossy().into_owned())
+}
+
+/// Команда: «ритуал» обновления прошивки — одним вызовом.
+///
+/// Что делает по шагам:
+///   1. Проверяет, что старый файл old_path существует и является обычным файлом.
+///   2. Проверяет, что папка BackUp рядом с exe существует
+///      (её создание — отдельная команда ensure_backup_dir).
+///   3. Читает старое содержимое old_path.
+///   4. Вычисляет имя файла-бэкапа (только имя, BackUp — плоский).
+///   5. Если файл с таким именем уже лежит в BackUp:
+///        - overwrite = false → возвращает ошибку "BACKUP_ALREADY_EXISTS"
+///          (TS-сторона спрашивает пользователя и повторяет с overwrite = true);
+///        - overwrite = true  → перезаписывает.
+///   6. Копирует старое содержимое в BackUp/<имя>.
+///   7. Перезаписывает old_path новым содержимым new_content.
+///   8. Если после перезаписи папка-источник осталась пустой и это не сам
+///      корень Devices — удаляет её (по требованию: пустые папки не хранить).
+///
+/// Возвращает путь к созданному бэкапу — чтобы TS мог показать его пользователю.
+#[tauri::command]
+pub fn backup_and_replace_ini(
+    old_path: String,
+    new_content: Vec<u8>,
+    overwrite: bool,
+) -> Result<String, String> {
+    eprintln!(
+        "[RUST] backup_and_replace_ini: old_path = '{}', {} байт нового содержимого, overwrite = {}",
+        old_path,
+        new_content.len(),
+        overwrite
+    );
+
+    let old_file_path = Path::new(&old_path);
+
+    // 1. Старый файл должен существовать и быть обычным файлом.
+    if !old_file_path.exists() {
+        return Err(format!("Старый файл не найден: {}", old_path));
+    }
+    if !old_file_path.is_file() {
+        return Err(format!("Путь не является файлом: {}", old_path));
+    }
+
+    // Имя старого файла (например, "00000056.ini") — оно же имя бэкапа.
+    // BackUp плоский, поэтому путь не сохраняем, только имя.
+    let file_name = old_file_path
+        .file_name()
+        .ok_or_else(|| format!("Не удалось выделить имя файла из '{}'", old_path))?
+        .to_string_lossy()
+        .into_owned();
+
+    // 2. Папка BackUp рядом с exe. Если её нет — это ошибка: TS-сторона
+    //    должна была сначала вызвать ensure_backup_dir (создать при согласии
+    //    пользователя) и получить "BACKUP_DIR_NOT_FOUND" при отказе.
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {}", e))?;
+    let exe_dir = exe_path
+        .parent()
+        .ok_or_else(|| "У пути к исполняемому файлу нет родительской папки".to_string())?;
+    let backup_dir = exe_dir.join("BackUp");
+
+    if !backup_dir.is_dir() {
+        return Err("BACKUP_DIR_NOT_FOUND".to_string());
+    }
+
+    let backup_path = backup_dir.join(&file_name);
+
+    // 5. Файл в BackUp уже есть — возвращаем специальную ошибку,
+    //    чтобы TS-сторона спросила «Перезаписать?» и повторила с overwrite = true.
+    if backup_path.exists() && !overwrite {
+        return Err("BACKUP_ALREADY_EXISTS".to_string());
+    }
+
+    // 3. Читаем старый файл в память до любых изменений на диске.
+    //    Если чтение упадёт — ничего не испортим.
+    let old_bytes = fs::read(old_file_path)
+        .map_err(|e| format!("Не удалось прочитать старый файл '{}': {}", old_path, e))?;
+
+    // 6. Пишем копию в BackUp. Если тут упадёт — оригинал ещё не тронут.
+    fs::write(&backup_path, &old_bytes).map_err(|e| {
+        format!(
+            "Не удалось записать бэкап '{}': {}",
+            backup_path.display(),
+            e
+        )
+    })?;
+    eprintln!(
+        "[RUST] backup_and_replace_ini: бэкап записан в '{}'",
+        backup_path.display()
+    );
+
+    // 7. Перезаписываем оригинал новым содержимым.
+    fs::write(old_file_path, &new_content).map_err(|e| {
+        format!(
+            "Не удалось перезаписать файл '{}': {}",
+            old_path, e
+        )
+    })?;
+    eprintln!("[RUST] backup_and_replace_ini: оригинал перезаписан");
+
+    // 8. Если папка-источник осталась пустой и это не корень Devices —
+    //    удаляем её. remove_dir сработает только для пустой папки,
+    //    поэтому проверка на «не корень» — единственное, что нужно.
+    if let Some(parent) = old_file_path.parent() {
+        let devices_dir = exe_dir.join("Devices");
+        if parent != devices_dir && parent.is_dir() {
+            // Проверяем, пуста ли папка: если в ней не осталось записей — удаляем.
+            match fs::read_dir(parent) {
+                Ok(mut entries) => {
+                    if entries.next().is_none() {
+                        if let Err(e) = fs::remove_dir(parent) {
+                            // Не критично: файл уже обновлён, просто папка осталась.
+                            eprintln!(
+                                "[RUST] backup_and_replace_ini: не удалось удалить пустую папку '{}': {}",
+                                parent.display(),
+                                e
+                            );
+                        } else {
+                            eprintln!(
+                                "[RUST] backup_and_replace_ini: пустая папка '{}' удалена",
+                                parent.display()
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "[RUST] backup_and_replace_ini: не удалось прочитать папку '{}': {}",
+                        parent.display(),
+                        e
+                    );
+                }
+            }
+        }
+    }
+
+    Ok(backup_path.to_string_lossy().into_owned())
+}
