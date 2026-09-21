@@ -130,12 +130,27 @@ export function initDeviceManagementUI(deps: DeviceManagementUIDeps): void {
       if (!matchedId && fwUpdateCandidate) {
         const fullInfo: FwUpdateInfo = parseDeviceIdFull(idText);
         const oldDevice = getAllDevices().find((d) => d.id === fwUpdateCandidate);
+
+        // ДИАГНОСТИКА: смотрим, какие значения дают промежуточные шаги.
+        console.log('[DEBUG] idText из баннера:', JSON.stringify(idText));
+        console.log('[DEBUG] fullInfo.idLine:', JSON.stringify(fullInfo.idLine));
+        console.log('[DEBUG] fwUpdateCandidate:', JSON.stringify(fwUpdateCandidate));
+        console.log('[DEBUG] oldDevice найден:', !!oldDevice);
+        if (oldDevice) {
+          const oldDev = oldDevice.iniConfig.device;
+          console.log('[DEBUG] oldDevice.iniConfig.device:', JSON.stringify(oldDev));
+        }
+
         if (oldDevice) {
           const oldDev = oldDevice.iniConfig.device;
           const oldDevId = oldDev ? oldDev.id : '';
           const oldLoc = oldDev?.location ?? '';
           const store = getFileStore();
-          const entry = store.get(`${oldLoc}::${oldDevId}`);
+          const lookupKey = `${oldLoc}::${oldDevId}`;
+          const entry = store.get(lookupKey);
+          console.log('[DEBUG] lookup key:', JSON.stringify(lookupKey));
+          console.log('[DEBUG] все ключи fileStore:', JSON.stringify([...store.keys()]));
+          console.log('[DEBUG] entry найден:', !!entry, 'есть .file:', !!entry?.file);
           if (entry?.file) {
             fullInfo.oldFileName = entry.file.name;
           }

@@ -206,17 +206,177 @@ export async function handleAddToBaseGeneric(src: AddToBaseSource): Promise<void
     // (см. file-loader.ts) и будет использован при сохранении изменений
     // (см. save-ini.ts).
     if (isTauriMode()) {
-        // Режим обновления прошивки (замена старого INI новым, со сносом
-        // старого в BackUp) в Tauri пока не реализован — там нужна отдельная
-        // логика на Rust-стороне. Честно сообщаем и выходим, чтобы не
-        // создавать у пользователя видимость успешного сохранения.
-        if (src.moveExistingToBackup && src.oldFileName) {
-            showIdModal('Режим обновления прошивки: сохранение на диск в нативном приложении пока не реализовано.');
-            return;
-        }
-
+        // Импорты Tauri-плагинов объявляем сразу в начале нативной ветки,
+        // потому что они нужны и в блоке обновления прошивки, и в обычном
+        // блоке ниже. В исходном варианте объявление стояло только в обычном
+        // блоке, и в блоке обновления invoke/writeFile были ещё не определены.
         const { invoke } = await import('@tauri-apps/api/core');
         const { writeFile } = await import('@tauri-apps/plugin-fs');
+
+        // ─── Режим обновления прошивки ──────────────────────────────────────
+        // Задача: заменить старый INI новым, предварительно сохранив копию
+        // старого в папке BackUp (плоско, имя файла не меняем).
+        if (src.moveExistingToBackup && src.oldFileName) {
+            // 1. Ищем путь к старому файлу в fileStore.
+            //    Записи в fileStore появляются при автозагрузке Devices
+            //    (см. tauri-autoloader.ts) — там хранится поле path.
+            const store = getFileStore();
+            let oldPath: string | undefined;
+            for (const e of Array.from(store.values())) {
+                if (e.file && e.file.name === src.oldFileName && e.path) {
+                    oldPath = e.path;
+                    break;
+                }
+            }
+
+            // 2. Путь неизвестен — по договорённости бэкап пропускаем,
+            //    но новый файл всё равно пишем. Логика записи — та же,
+            //    что в обычном режиме (см. ниже): определяем имя подпапки
+            //    по Location, пишем файл, отдаём путь в конвейер.
+            if (!oldPath) {
+                console.warn(`[new-device] Tauri: путь к старому файлу "${src.oldFileName}" не найден — бэкап пропускаем, пишем новый файл.`);
+
+                const subdirNameFallback = resolveDeviceSubdirName(location, idText);
+                if (!subdirNameFallback) {
+                    showIdModal('Не удалось определить имя папки для устройства: не задан Location и не удалось извлечь тип из строки ID. Файл не сохранён.');
+                    return;
+                }
+                let subdirPathFallback: string;
+                try {
+                    subdirPathFallback = await invoke<string>('ensure_device_subdir', { name: subdirNameFallback });
+                } catch (err) {
+                    console.error('[new-device] Tauri: ошибка создания подпапки Devices:', err);
+                    const msg = err instanceof Error ? err.message : String(err);
+                    showIdModal(`Не удалось создать папку "${subdirNameFallback}": ${msg}`);
+                    return;
+                }
+                const fullPathFallback = `${subdirPathFallback}/${fileName}`;
+                try {
+                    await writeFile(fullPathFallback, bytes);
+                    console.log(`[new-device] Tauri: файл записан в ${fullPathFallback} (без бэкапа)`);
+                } catch (err) {
+                    console.error('[new-device] Tauri: ошибка записи файла:', err);
+                    const msg = err instanceof Error ? err.message : String(err);
+                    showIdModal(`Не удалось сохранить файл ${fileName}: ${msg}`);
+                    return;
+                }
+
+                const addToLoadedFnNoBackup = getAddToLoadedFn();
+                if (addToLoadedFnNoBackup) {
+                    await addToLoadedFnNoBackup(content, fileName, file, undefined, fullPathFallback);
+                    selectNewDeviceInTree(idText);
+                } else {
+                    console.warn('[new-device] Связка с конвейером загрузки не установлена.');
+                }
+                src.onDone();
+                return;
+            }
+
+            // 3. Путь известен — проверяем/создаём папку BackUp.
+            const { ask } = await import('@tauri-apps/plugin-dialog');
+            try {
+                await invoke<string>('ensure_backup_dir', { create: false });
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                if (msg.includes('BACKUP_DIR_NOT_FOUND')) {
+                    const shouldCreate = await ask(
+                        `Папка BackUp не найдена рядом с приложением.\n\nСоздать папку BackUp?`,
+                        { title: 'Папка BackUp', kind: 'info' },
+                    );
+                    if (!shouldCreate) {
+                        console.log('[new-device] Tauri: пользователь отказался создавать BackUp — обновление отменено.');
+                        return;
+                    }
+                    try {
+                        await invoke<string>('ensure_backup_dir', { create: true });
+                    } catch (err2) {
+                        const msg2 = err2 instanceof Error ? err2.message : String(err2);
+                        showIdModal(`Не удалось создать папку BackUp: ${msg2}`);
+                        return;
+                    }
+                } else {
+                    showIdModal(`Ошибка при проверке папки BackUp: ${msg}`);
+                    return;
+                }
+            }
+
+            // 4. Бэкап + перезапись одним вызовом Rust-команды.
+            //    Если файл с таким именем уже лежит в BackUp — Rust вернёт
+            //    "BACKUP_ALREADY_EXISTS", и мы спросим пользователя.
+            let backupPath: string | null = null;
+            try {
+                backupPath = await invoke<string>('backup_and_replace_ini', {
+                    oldPath,
+                    newContent: bytes,
+                    overwrite: false,
+                });
+                console.log(`[new-device] Tauri: бэкап сохранён в ${backupPath}, оригинал перезаписан.`);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                if (msg.includes('BACKUP_ALREADY_EXISTS')) {
+                    const shouldOverwrite = await ask(
+                        `Файл ${src.oldFileName} уже есть в папке BackUp.\n\nПерезаписать его?`,
+                        { title: 'BackUp', kind: 'warning' },
+                    );
+                    if (!shouldOverwrite) {
+                        console.log('[new-device] Tauri: пользователь отказался перезаписывать бэкап — обновление отменено.');
+                        return;
+                    }
+                    try {
+                        backupPath = await invoke<string>('backup_and_replace_ini', {
+                            oldPath,
+                            newContent: bytes,
+                            overwrite: true,
+                        });
+                        console.log(`[new-device] Tauri: бэкап перезаписан в ${backupPath}, оригинал перезаписан.`);
+                    } catch (err2) {
+                        const msg2 = err2 instanceof Error ? err2.message : String(err2);
+                        showIdModal(`Не удалось сохранить бэкап: ${msg2}`);
+                        return;
+                    }
+                } else {
+                    showIdModal(`Не удалось обновить файл: ${msg}`);
+                    return;
+                }
+            }
+
+            // 5. Помечаем старую запись в реестре как резервную копию
+            //    (isBackup = true). Это то самое «старое устройство», которое
+            //    уехало в BackUp: файл на диске уже перезаписан новой версией,
+            //    но в дереве мы хотим видеть его отдельной красной строкой.
+            //
+            //    Заодно удаляем запись из fileStore: путь, который в ней хранится,
+            //    ведёт на уже перезаписанный файл — работать с ним как с «живым»
+            //    устройством нельзя. Актуальный путь для новой версии появится
+            //    ниже, при регистрации через addToLoadedFnUpdate.
+            if (src.oldFileName) {
+                const store = getFileStore();
+                for (const [key, e] of Array.from(store.entries())) {
+                    if (e.file && e.file.name === src.oldFileName) {
+                        // Находим соответствующий узел дерева по id из fileStore
+                        // и помечаем его как backup — он отрисуется красным.
+                        const item = getAllDevices().find((d) => d.iniConfig?.device?.id === e.id);
+                        if (item) {
+                            item.isBackup = true;
+                            console.log(`[new-device] Tauri: старуе устройство ${e.id} помечено как backup`);
+                        }
+                        store.delete(key);
+                    }
+                }
+            }
+
+            // 6. Отдаём файл в общий конвейер. Путь — старый (файл лежит там же,
+            //    где и был, просто с новым содержимым). Так работает и в браузере.
+            const addToLoadedFnUpdate = getAddToLoadedFn();
+            if (addToLoadedFnUpdate) {
+                await addToLoadedFnUpdate(content, fileName, file, undefined, oldPath);
+                selectNewDeviceInTree(idText);
+            } else {
+                console.warn('[new-device] Связка с конвейером загрузки не установлена.');
+            }
+            src.onDone();
+            return;
+        }
 
         // Имя подпапки внутри Devices: Location, либо токены ID-строки
         // между серийником и датой (см. resolveDeviceSubdirName выше).
