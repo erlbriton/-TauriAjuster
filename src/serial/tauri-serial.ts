@@ -72,7 +72,7 @@ export class TauriSerialPort implements ISerialPort {
      */
     public async connect(baudRate?: number): Promise<void> {
         if (!this.portPath) {
-            throw new Error('Порт не указан. Вызовите setPortPath() перед connect().');
+            throw new Error('Порт не указан');
         }
 
         // Если закрытие порта ещё в полёте — дожидаемся его завершения.

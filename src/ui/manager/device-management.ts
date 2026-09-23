@@ -19,6 +19,7 @@ import { setTreeGroupMode, TreeGroupMode } from '../../ini-manager/tree-core.js'
 import { renderDeviceTree } from '../../ini-manager/tree-ui.js';
 import { getFileStore } from '../../ini-manager/file-loader.js';
 import { reloadIniFilesFromDisk } from '../../ini-manager/file-loader.js';
+import { addNewDevicesFromDisk } from '../../core/platform/tauri-autoloader.js';
 import { showFwUpdateModal } from '../fw-update-modal.js';
 import { showNewDeviceModal, setNewDeviceAddToLoaded } from '../new-device-ui.js';
 import { processSingleFileContent } from '../../ini-manager/file-loader.js';
@@ -294,15 +295,29 @@ export function initDeviceManagementUI(deps: DeviceManagementUIDeps): void {
   if (deviceListActionBtn) {
     deviceListActionBtn.addEventListener('click', async () => {
       if (deviceListMode === 'refresh') {
+        // Шаг 1: подхватываем НОВЫЕ файлы из папки Devices, появившиеся
+        // вне приложения (пользователь добавил их через файловый менеджер
+        // или скопировал подпапку). reloadIniFilesFromDisk их не видит,
+        // потому что в fileStore ещё нет записей про эти файлы.
+        const added = await addNewDevicesFromDisk(appState);
+
+        // Шаг 2: перечитываем уже известные файлы — на случай, если
+        // пользователь правил их во внешнем редакторе. После первого
+        // шага в fileStore попали и новые записи, поэтому reload
+        // обработает и их (в первый раз просто отметит как unchanged).
         const results = await reloadIniFilesFromDisk();
-        if (results.updated === 0 && results.removed === 0 && results.errors.length === 0) {
+
+        const parts: string[] = [];
+        if (added > 0) parts.push(`добавлено новых: ${added}`);
+        if (results.updated > 0) parts.push(`изменений в файлах: ${results.updated}`);
+        if (results.removed > 0) parts.push(`удалено из списка: ${results.removed}`);
+
+        if (parts.length === 0) {
           showCompactError('Изменений в INI-файлах не обнаружено.');
         } else {
-          const parts: string[] = [];
-          if (results.updated > 0) parts.push(`Изменений в файлах: ${results.updated}`);
-          if (results.removed > 0) parts.push(`удалено из списка: ${results.removed}`);
           showCompactError(`Содержимое ini файлов обновлено. ${parts.join(', ')}.`);
         }
+
         if (results.errors.length > 0) {
           console.warn('[UI] reloadIniFilesFromDisk — ошибки:', results.errors);
         }
