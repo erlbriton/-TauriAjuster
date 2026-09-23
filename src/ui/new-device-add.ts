@@ -32,7 +32,7 @@ import { renderDeviceTree } from '../ini-manager/tree-ui.js';
 // Всё, что «живёт» в UI-части окна — берём оттуда,
 // чтобы не дублировать состояние (шаблоны, колбэк загрузки, статус).
 import {
-    getTemplateFile,
+    readTemplateFile,
     getAddToLoadedFn,
     hideNewDeviceModal,
     setNewDeviceStatus,
@@ -130,7 +130,7 @@ export async function handleAddToBaseGeneric(src: AddToBaseSource): Promise<void
         src.setStatus('Выберите шаблон из списка.');
         return;
     }
-    const templateFile = getTemplateFile(templateName);
+    const templateFile = await readTemplateFile(templateName);
     if (!templateFile) {
         src.setStatus('Файл шаблона не найден — добавьте шаблоны ещё раз.');
         return;

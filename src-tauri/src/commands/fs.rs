@@ -107,6 +107,13 @@ pub fn ensure_records_dir(create: bool) -> Result<String, String> {
 /// Команда: физически удалить файл с диска (безвозвратно).
 /// Используется пунктом контекстного меню "Удалить с диска".
 /// Защиты: путь не пустой, объект существует и является обычным файлом.
+///
+/// После удаления файла, если его родительская папка:
+///   - находится внутри Devices/,
+///   - и не равна самой Devices/,
+///   - и после удаления оказалась пустой,
+/// — папка тоже удаляется. Это убирает накопление пустых подпапок
+/// после удаления последнего файла локации (или версии прошивки).
 #[tauri::command]
 pub fn delete_file_from_disk(path: String) -> Result<(), String> {
     eprintln!("[RUST] delete_file_from_disk: путь = '{}'", path);
@@ -124,10 +131,68 @@ pub fn delete_file_from_disk(path: String) -> Result<(), String> {
         return Err(format!("Путь не является файлом: {}", path));
     }
 
+    // Запоминаем родительскую папку до удаления: после remove_file
+    // у file_path уже нельзя будет получить parent (путь валиден,
+    // но проще сохранить заранее).
+    let parent_opt = file_path.parent().map(|p| p.to_path_buf());
+
     std::fs::remove_file(file_path)
         .map_err(|e| format!("Не удалось удалить файл '{}': {}", path, e))?;
 
     eprintln!("[RUST] delete_file_from_disk: файл удалён");
+
+    // Удаляем пустую родительскую папку, но только если она внутри Devices/.
+    // Логика повторяет аналогичную в backup_and_replace_ini (ini.rs),
+    // чтобы поведение было единообразным.
+    if let Some(parent) = parent_opt {
+        // Определяем exe_dir — та же логика, что в ensure_records_dir:
+        // учитываем APPIMAGE на Linux и обычный exe/bin на Windows.
+        let exe_dir_opt = if let Ok(appimage_path) = std::env::var("APPIMAGE") {
+            std::path::PathBuf::from(appimage_path).parent().map(|p| p.to_path_buf())
+        } else {
+            std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|pp| pp.to_path_buf()))
+        };
+
+        if let Some(exe_dir) = exe_dir_opt {
+            let devices_dir = exe_dir.join("Devices");
+
+            // Удаляем папку только если она внутри Devices/ и не сама Devices/.
+            // starts_with отсекает случай, когда файл лежит вне базы —
+            // в этом случае родительскую папку не трогаем.
+            if parent != devices_dir && parent.starts_with(&devices_dir) && parent.is_dir() {
+                match std::fs::read_dir(&parent) {
+                    Ok(mut entries) => {
+                        if entries.next().is_none() {
+                            // Папка пуста — удаляем.
+                            if let Err(e) = std::fs::remove_dir(&parent) {
+                                // Не критично: файл уже удалён, просто папка осталась.
+                                eprintln!(
+                                    "[RUST] delete_file_from_disk: не удалось удалить пустую папку '{}': {}",
+                                    parent.display(),
+                                    e
+                                );
+                            } else {
+                                eprintln!(
+                                    "[RUST] delete_file_from_disk: пустая папка '{}' удалена",
+                                    parent.display()
+                                );
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "[RUST] delete_file_from_disk: не удалось прочитать папку '{}': {}",
+                            parent.display(),
+                            e
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 

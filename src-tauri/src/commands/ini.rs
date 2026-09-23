@@ -367,3 +367,199 @@ pub fn backup_and_replace_ini(
 
     Ok(backup_path.to_string_lossy().into_owned())
 }
+
+/// Команда: вернуть путь к папке TemplateDevice рядом с exe.
+///
+/// TemplateDevice — это папка с шаблонами INI-файлов (файлы без расширения
+/// .ini), которые пользователь выбирает в окнах "Новое устройство" и
+/// "Обновление программы устройства". Лежит рядом с Devices и BackUp.
+///
+/// Логика работы — та же, что у ensure_backup_dir:
+///   - если папка уже существует — вернуть её путь;
+///   - если папки нет и create = false — вернуть специальную ошибку
+///     "TEMPLATE_DIR_NOT_FOUND" (TS-сторона её распознаёт и спрашивает
+///     пользователя, создавать ли папку);
+///   - если папки нет и create = true — создать и вернуть путь.
+///
+/// Структура базы:
+///   <рядом с exe>/
+///     Devices/          ← рабочая база INI, разложенная по подпапкам
+///     BackUp/           ← старые INI, перемещённые при обновлении прошивки
+///     TemplateDevice/   ← файлы-шаблоны для создания новых устройств
+#[tauri::command]
+pub fn ensure_template_dir(create: bool) -> Result<String, String> {
+    eprintln!("[RUST] ensure_template_dir: create = {}", create);
+
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {}", e))?;
+    let exe_dir = exe_path
+        .parent()
+        .ok_or_else(|| "У пути к исполняемому файлу нет родительской папки".to_string())?;
+    let template_dir = exe_dir.join("TemplateDevice");
+
+    if !template_dir.is_dir() {
+        if create {
+            fs::create_dir_all(&template_dir).map_err(|e| {
+                format!(
+                    "Не удалось создать папку '{}': {}",
+                    template_dir.display(),
+                    e
+                )
+            })?;
+            eprintln!(
+                "[RUST] ensure_template_dir: создана папка '{}'",
+                template_dir.display()
+            );
+        } else {
+            // Специальная ошибка: TS-сторона её распознаёт и предлагает
+            // пользователю создать папку — как у ensure_backup_dir.
+            return Err("TEMPLATE_DIR_NOT_FOUND".to_string());
+        }
+    }
+
+    Ok(template_dir.to_string_lossy().into_owned())
+}
+
+/// Команда: вернуть список имён файлов из папки TemplateDevice.
+///
+/// Возвращает только ИМЕНА файлов (не полные пути, не содержимое).
+/// Содержимое читается отдельной командой только в момент, когда
+/// пользователь уже выбрал шаблон и нажал "Добавить устройство в базу".
+///
+/// Если папки TemplateDevice нет — возвращает пустой массив, без ошибки.
+/// Это штатная ситуация: папка может быть ещё не создана.
+///
+/// Подпапки пропускаются: шаблоны — это файлы. Алфавитная сортировка
+/// даёт стабильный порядок между запусками.
+#[tauri::command]
+pub fn scan_template_dir() -> Result<Vec<String>, String> {
+    eprintln!("[RUST] scan_template_dir: вызов команды");
+
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {}", e))?;
+    let exe_dir = exe_path
+        .parent()
+        .ok_or_else(|| "У пути к исполняемому файлу нет родительской папки".to_string())?;
+    let template_dir = exe_dir.join("TemplateDevice");
+
+    // Папки нет — возвращаем пустой список, это не ошибка.
+    if !template_dir.is_dir() {
+        eprintln!("[RUST] scan_template_dir: папки TemplateDevice нет, возвращаем пустой список");
+        return Ok(Vec::new());
+    }
+
+    let entries = fs::read_dir(&template_dir)
+        .map_err(|e| format!("Не удалось прочитать папку {}: {}", template_dir.display(), e))?;
+
+    let mut names: Vec<String> = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        // Только обычные файлы — подпапки пропускаем.
+        if path.is_file() {
+            names.push(entry.file_name().to_string_lossy().into_owned());
+        }
+    }
+
+        // Стабильный порядок — алфавитный.
+    names.sort();
+
+    eprintln!(
+        "[RUST] scan_template_dir: найдено {} шаблон(ов)",
+        names.len()
+    );
+    Ok(names)
+}
+
+/// Команда: скопировать выбранный пользователем файл в папку TemplateDevice.
+///
+/// Сценарии использования (по требованиям алгоритма):
+///   - пользователь выбрал файл ВНЕ TemplateDevice → копируем его в папку;
+///   - пользователь выбрал файл ВНУТРИ TemplateDevice → ничего не делаем,
+///     просто возвращаем имя (файл уже в списке);
+///   - файл с таким именем уже есть в TemplateDevice, а overwrite = false →
+///     возвращаем "TEMPLATE_FILE_EXISTS", TS-сторона спросит «Перезаписать?»
+///     и при согласии повторит вызов с overwrite = true.
+///
+/// Возвращает имя файла — чтобы TS-сторона сразу могла добавить его в список.
+#[tauri::command]
+pub fn copy_template_file(src_path: String, overwrite: bool) -> Result<String, String> {
+    eprintln!(
+        "[RUST] copy_template_file: src = '{}', overwrite = {}",
+        src_path,
+        overwrite
+    );
+
+    let src = Path::new(&src_path);
+
+    // Источник должен существовать и быть обычным файлом.
+    if !src.exists() {
+        return Err(format!("Исходный файл не найден: {}", src_path));
+    }
+    if !src.is_file() {
+        return Err(format!("Источник не является файлом: {}", src_path));
+    }
+
+    // Имя файла — оно же будет именем в TemplateDevice.
+    let file_name = src
+        .file_name()
+        .ok_or_else(|| format!("Не удалось выделить имя файла из '{}'", src_path))?
+        .to_string_lossy()
+        .into_owned();
+
+    // Папка TemplateDevice рядом с exe. К моменту вызова команды она
+    // уже должна существовать — TS-сторона вызывает ensure_template_dir
+    // с create = true, если папки не было и пользователь согласился.
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {}", e))?;
+    let exe_dir = exe_path
+        .parent()
+        .ok_or_else(|| "У пути к исполняемому файлу нет родительской папки".to_string())?;
+    let template_dir = exe_dir.join("TemplateDevice");
+
+    if !template_dir.is_dir() {
+        return Err("TEMPLATE_DIR_NOT_FOUND".to_string());
+    }
+
+    let target_path = template_dir.join(&file_name);
+
+    // Если источник уже внутри TemplateDevice — копирование не нужно.
+    // Сравниваем канонические пути: они разрешают симлинки и приводят
+    // абсолютные пути к единому виду. Если canonicalize не сработал
+    // (например, файла нет), просто идём дальше и попробуем копировать —
+    // случай редкий, а логика останется корректной.
+    if let (Ok(src_canon), Ok(tgt_canon)) = (
+        fs::canonicalize(src),
+        fs::canonicalize(&target_path),
+    ) {
+        if src_canon == tgt_canon {
+            eprintln!(
+                "[RUST] copy_template_file: файл уже лежит в TemplateDevice, копирование не нужно"
+            );
+            return Ok(file_name);
+        }
+    }
+
+    // Целевой файл уже есть и перезапись не разрешена — отдаём спец. ошибку.
+    if target_path.exists() && !overwrite {
+        return Err("TEMPLATE_FILE_EXISTS".to_string());
+    }
+
+    // Копирование. fs::copy перезаписывает целевой файл, если он есть, —
+    // это и нужно при overwrite = true.
+    fs::copy(src, &target_path).map_err(|e| {
+        format!(
+            "Не удалось скопировать файл '{}' в '{}': {}",
+            src_path,
+            target_path.display(),
+            e
+        )
+    })?;
+
+    eprintln!(
+        "[RUST] copy_template_file: файл скопирован в '{}'",
+        target_path.display()
+    );
+
+    Ok(file_name)
+}

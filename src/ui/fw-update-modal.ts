@@ -5,7 +5,7 @@
 // Действия кнопок подключаются следующим шагом — сейчас заглушки.
 
 import { showBackupWindow } from './backup-ui.js';
-import { refreshTemplateSelects } from './new-device-ui.js';
+import { refreshTemplateSelects, handleAddTemplate } from './new-device-ui.js';
 import { handleAddToBaseGeneric } from './new-device-add.js';
 
 /** Текущая информация об устройстве с другой версией ПО */
@@ -52,9 +52,11 @@ export function initFwUpdateModal(): void {
         });
     });
 
-    // "Добавить шаблон" — общий picker шаблонов
+    // "Добавить шаблон" — та же логика, что в окне "Новое устройство":
+    // проверяем/создаём папку TemplateDevice, открываем системный диалог
+    // выбора файла, копируем выбранный шаблон в папку, обновляем списки.
     document.getElementById('fwUpdateAddTemplateBtn')?.addEventListener('click', () => {
-        document.getElementById('templatePicker')?.click();
+        void handleAddTemplate();
     });
 
     // "Добавить устройство в базу" — тот же конвейер, что у "Нового устройства",
@@ -103,8 +105,11 @@ export function showFwUpdateModal(info: FwUpdateInfo): void {
     setText('fwUpdateFwVersion', info.firmwareVersion);
     setText('fwUpdateFwDate', info.firmwareDate);
 
-    // Заполняем список шаблонов общими добавленными шаблонами
-    refreshTemplateSelects();
+    // Заполняем <select> шаблонов из папки TemplateDevice.
+    // Функция асинхронная (сканирует папку через Rust), но окно можно
+    // показывать сразу — список дозаполнится за миллисекунды.
+    // void — явно показываем, что результат намеренно не ждём.
+    void refreshTemplateSelects();
 
     overlay.classList.remove('hidden');
 }
