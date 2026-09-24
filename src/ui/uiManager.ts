@@ -10,7 +10,7 @@ import type { IOscilloscopeApi } from '../core/osc-api.js';
 import type { ModbusParser } from '../serial/modbus.js';
 import { IniParser as CoreIniParser, IniConfig } from '../core/ini/index.js';
 import { updateIdBanner, showCompactError } from './ui.js';
-import { reloadIniFilesFromDisk } from '../ini-manager/file-loader.js';
+import { reloadIniFilesFromDisk } from '../ini-manager/file-sync.js';
 import { isLinux } from '../core/platform.js'; 
 import { initModbusScanUI } from './modbus-scan-ui.js';
 import { initReportUI } from './report-ui.js';

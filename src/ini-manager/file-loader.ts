@@ -9,58 +9,24 @@ import { renderDeviceTree } from './tree-ui.js';
 import { renderModbusTable } from '../ui/tree.js';
 import { IniParser as CoreIniParser, IniConfig, iniParamsToChannelConfigs } from '../core/ini/index.js';
 import type { AppState } from '../core/app-state.js';
-/** Геттер хранилища файлов (используется генератором отчётов) */
-export function getFileStore(): Map<string, StoredFileEntry> {
-    return fileStore;
-}
 import { decodeTextBuffer } from './textFileReader.js';
 
-/**
- * Открывает INI-файл через File System Access API.
- * Сохраняет хэндл файла в appState для последующей записи.
- */
-/** Хэндлы открытых INI-файлов (имя файла → хэндл) для записи обратно */
-const iniFileHandles = new Map<string, FileSystemFileHandle>();
-let currentIniFileName: string | null = null;
+// ─── Хранилище файлов вынесено в отдельный модуль (file-store.ts) ──────────
+// Импортируем нужные символы и реэкспортируем их, чтобы внешние модули
+// (device-management.ts, uiManager.ts, save-ini.ts, backup-ui.ts,
+// new-device-add.ts) могли продолжать импортировать их из './file-loader.js'
+// без изменений в их коде.
+import {
+    fileStore,
+    getFileStore,
+    getCurrentIniFileHandle,
+    getCurrentIniFilePath,
+    setCurrentIniFile,
+} from './file-store.js';
+import type { StoredFileEntry } from './file-store.js';
 
-/**
- * Хранилище File-объектов для перечитывания INI-файлов с диска.
- * Ключ: `${location}::${id}` — совпадает с уникальностью в deviceRegistry.
- * Браузер не следит за файлами сам, но пока жива ссылка на File,
- * file.text() возвращает актуальное содержимое с диска.
- */
-export interface StoredFileEntry {
-    file: File;
-    handle?: FileSystemFileHandle;
-    /** Родительская папка файла (если известна при загрузке — например, при открытии папки) */
-    parentHandle?: FileSystemDirectoryHandle;
-    location: string;
-    id: string;
-    content: string;
-    lastModified: number;
-    /** Абсолютный путь к файлу на диске (для открытия во внешнем редакторе).
-     *  Необязательное поле: старые записи из браузерной версии не имеют пути,
-     *  новые записи из Tauri-автозагрузчика получают полный путь. */
-    path?: string;
-}
-const fileStore: Map<string, StoredFileEntry> = new Map();
-
-/** Возвращает хэндл файла, с которым сейчас работает аджастер */
-// Добавляем переменную для хранения пути в Tauri
-let currentIniPath: string | null = null;
-
-export function getCurrentIniFileHandle(): FileSystemFileHandle | null {
-  if (!currentIniFileName) return null;
-  return iniFileHandles.get(currentIniFileName) ?? null;
-}
-
-/**
- * Возвращает абсолютный путь к текущему INI-файлу на диске.
- * Используется в нативном режиме (Tauri) для сохранения изменений.
- */
-export function getCurrentIniFilePath(): string | null {
-  return currentIniPath;
-}
+export { getFileStore, getCurrentIniFileHandle, getCurrentIniFilePath };
+export type { StoredFileEntry };
 
 
 
@@ -86,8 +52,9 @@ export async function processSingleFileContent(
      *  Необязательный параметр: передаётся из Tauri-автозагрузчика. */
     filePath?: string
 ): Promise<void> {
-  currentIniFileName = fileName;
-  currentIniPath = filePath ?? null; // Сохраняем путь для Tauri
+  // Имя и путь текущего файла хранятся теперь в модуле file-store.ts;
+  // присваиваем через сеттер, а не напрямую — переменные больше не локальные.
+  setCurrentIniFile(fileName, filePath ?? null);
   try {
     if (!content) {
       throw new Error('Файл пуст');
@@ -190,7 +157,7 @@ export async function processSingleFileContent(
   }
 }
 
-function readFileAsText(file: File): Promise<string> {
+export function readFileAsText(file: File): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e: ProgressEvent<FileReader>) => {
@@ -206,100 +173,6 @@ function readFileAsText(file: File): Promise<string> {
     };
     reader.readAsText(file, 'windows-1251');
   });
-}
-
-/**
- * Перечитывает все загруженные INI-файлы с диска.
- * - Файл изменён: обновляет запись в реестре и памяти.
- * - Файл удалён/перемещён: удаляет устройство из реестра.
- * - Файл не менялся: пропускает.
- */
-export async function reloadIniFilesFromDisk(): Promise<{
-    updated: number;
-    removed: number;
-    unchanged: number;
-    errors: string[];
-}> {
-    const results = { updated: 0, removed: 0, unchanged: 0, errors: [] as string[] };
-    const keys = Array.from(fileStore.keys());
-
-    if (keys.length === 0) {
-        console.log('[file-loader] reloadIniFilesFromDisk: нет файлов для перечитывания');
-        return results;
-    }
-
-    for (const key of keys) {
-        const entry = fileStore.get(key);
-        if (!entry) continue;
-
-        try {
-            let newContent: string;
-            
-            // Приоритет чтения содержимого файла:
-            // 1. Если есть путь на диске (Tauri-автозагрузчик) — читаем через Rust
-            // 2. Если есть хэндл (браузерный File System Access API) — берём свежий File
-            // 3. Иначе — используем старый снимок (изменения не обнаружим)
-            if (entry.path) {
-                // Читаем файл через Rust-команду: она возвращает сырые байты
-                const rawBytes = await window.__TAURI__.core.invoke<number[]>('read_ini_file', {
-                    path: entry.path
-                });
-                // Декодируем из windows-1251 через существующую функцию
-                // (та же, что используется в автозагрузчике)
-                const buffer = new Uint8Array(rawBytes).buffer as ArrayBuffer;
-                newContent = decodeTextBuffer(buffer);
-            } else if (entry.handle) {
-                const freshFile = await entry.handle.getFile();
-                newContent = await readFileAsText(freshFile);
-            } else {
-                // Нет ни пути, ни хэндла — используем снимок в памяти
-                newContent = await readFileAsText(entry.file);
-            }
-
-            if (newContent === entry.content) {
-                results.unchanged++;
-                continue;
-            }
-
-            // Файл изменился — парсим и обновляем реестр на месте
-            try {
-                const coreParser = new CoreIniParser();
-                const parseResult = coreParser.parse(newContent);
-                const newIniConfig = new IniConfig(parseResult);
-                const newConfig = parseResult.rawSections as RawIniConfig;
-
-                if (updateDeviceInRegistry(entry.location, entry.id, newIniConfig, newConfig)) {
-                    entry.content = newContent;
-                    entry.lastModified = Date.now();
-                    results.updated++;
-                    console.log(`[file-loader] Файл обновлён: ${entry.file.name}`);
-                } else {
-                    fileStore.delete(key);
-                    results.errors.push(`${entry.file.name}: устройство не найдено в реестре`);
-                }
-            } catch (parseErr) {
-                const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
-                results.errors.push(`${entry.file.name}: ошибка парсинга — ${msg}`);
-                console.error(`[file-loader] Parse error for ${entry.file.name}:`, parseErr);
-            }
-        } catch (readErr) {
-            // Файл удалён или перемещён
-            removeDeviceFromRegistry(entry.location, entry.id);
-            fileStore.delete(key);
-            results.removed++;
-            console.log(`[file-loader] Файл удалён/недоступен: ${entry.file.name}`);
-        }
-    }
-
-    if (results.updated > 0 || results.removed > 0) {
-        renderDeviceTree();
-        syncFilesToOscilloscope();
-        console.log(
-            `[file-loader] reload: updated=${results.updated}, removed=${results.removed}, unchanged=${results.unchanged}`,
-        );
-    }
-
-    return results;
 }
 
 // Пункт "Открыть файл для редактирования" контекстного меню дерева
@@ -387,7 +260,8 @@ export async function editDeviceIniFile(deviceId: string): Promise<void> {
     // это произойдёт при нажатии кнопки "Обновить список устройств"
     return;
 }
-function syncFilesToOscilloscope(): void {
+
+export function syncFilesToOscilloscope(): void {
   const osc = window.osc;
   if (!osc || typeof osc.setIniFiles !== 'function') return;
 

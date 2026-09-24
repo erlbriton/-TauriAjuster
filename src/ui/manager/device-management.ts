@@ -18,8 +18,7 @@ import { getAllDevices, getDeviceGroupKey, currentIniConfig } from '../../ini-ma
 import { setTreeGroupMode, TreeGroupMode } from '../../ini-manager/tree-core.js';
 import { renderDeviceTree } from '../../ini-manager/tree-ui.js';
 import { getFileStore } from '../../ini-manager/file-loader.js';
-import { reloadIniFilesFromDisk } from '../../ini-manager/file-loader.js';
-import { addNewDevicesFromDisk } from '../../core/platform/tauri-autoloader.js';
+import { resyncDevicesFromDisk } from '../../ini-manager/file-sync.js';
 import { showFwUpdateModal } from '../fw-update-modal.js';
 import { showNewDeviceModal, setNewDeviceAddToLoaded } from '../new-device-ui.js';
 import { processSingleFileContent } from '../../ini-manager/file-loader.js';
@@ -295,31 +294,26 @@ export function initDeviceManagementUI(deps: DeviceManagementUIDeps): void {
   if (deviceListActionBtn) {
     deviceListActionBtn.addEventListener('click', async () => {
       if (deviceListMode === 'refresh') {
-        // Шаг 1: подхватываем НОВЫЕ файлы из папки Devices, появившиеся
-        // вне приложения (пользователь добавил их через файловый менеджер
-        // или скопировал подпапку). reloadIniFilesFromDisk их не видит,
-        // потому что в fileStore ещё нет записей про эти файлы.
-        const added = await addNewDevicesFromDisk(appState);
-
-        // Шаг 2: перечитываем уже известные файлы — на случай, если
-        // пользователь правил их во внешнем редакторе. После первого
-        // шага в fileStore попали и новые записи, поэтому reload
-        // обработает и их (в первый раз просто отметит как unchanged).
-        const results = await reloadIniFilesFromDisk();
+        // Полная синхронизация состояния приложения с папкой Devices.
+        // resyncDevicesFromDisk сканирует диск целиком и приводит память
+        // в соответствие: добавляет новые файлы, обновляет изменённые,
+        // удаляет исчезнувшие, корректно переносит записи при смене
+        // локации или ID внутри файла (например, после апдейта прошивки).
+        const results = await resyncDevicesFromDisk(appState);
 
         const parts: string[] = [];
-        if (added > 0) parts.push(`добавлено новых: ${added}`);
-        if (results.updated > 0) parts.push(`изменений в файлах: ${results.updated}`);
-        if (results.removed > 0) parts.push(`удалено из списка: ${results.removed}`);
+        if (results.added > 0) parts.push(`добавлено: ${results.added}`);
+        if (results.updated > 0) parts.push(`изменено: ${results.updated}`);
+        if (results.removed > 0) parts.push(`удалено: ${results.removed}`);
 
         if (parts.length === 0) {
           showCompactError('Изменений в INI-файлах не обнаружено.');
         } else {
-          showCompactError(`Содержимое ini файлов обновлено. ${parts.join(', ')}.`);
+          showCompactError(`Синхронизация с диском завершена. ${parts.join(', ')}.`);
         }
 
         if (results.errors.length > 0) {
-          console.warn('[UI] reloadIniFilesFromDisk — ошибки:', results.errors);
+          console.warn('[UI] resyncDevicesFromDisk — ошибки:', results.errors);
         }
       } else {
         setTreeGroupMode(treeModeByButtonMode[deviceListMode] ?? 'location');
