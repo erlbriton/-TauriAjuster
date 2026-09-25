@@ -12,7 +12,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { decodeTextBuffer } from '../../ini-manager/textFileReader.js';
-import { processSingleFileContent, getFileStore } from '../../ini-manager/file-loader.js';
+import { processSingleFileContent } from '../../ini-manager/file-loader.js';
 import type { AppState } from '../app-state.js';
 
 /**
@@ -29,22 +29,6 @@ interface IniFileInfo {
     /** Время последнего изменения в миллисекундах unix-времени */
     last_modified_ms: number;
 }
-
-/**
- * Пути файлов, которые уже были добавлены этой функцией в текущей сессии.
- *
- * Нужен как страховка от повторного сообщения «новый файл» при повторном
- * клике по «Обновить список устройств». Причина, по которой это может
- * произойти: fileStore использует ключ `location::id`, и если в одной
- * локации лежат два файла с одинаковым ID, вторая запись перезаписывает
- * первую — её путь теряется. Множество addedPathsThisSession запоминает
- * все пути, реально обработанные этой функцией, и не даёт признать их
- * «новыми» повторно в том же сеансе приложения.
- *
- * Сбрасывается только при перезапуске приложения. На старте fileStore
- * заполняется autoLoadDevicesFolder, и работа идёт по его путям.
- */
-const addedPathsThisSession = new Set<string>();
 
 /**
  * Загружает все INI-файлы из папки Devices рядом с исполняемым файлом.
@@ -117,126 +101,4 @@ export async function autoLoadDevicesFolder(appState: AppState): Promise<number>
     }, 100);
 
     return loaded;
-}
-
-/**
- * Сканирует папку Devices и добавляет в приложение только те INI-файлы,
- * которых ещё нет в fileStore.
- *
- * Зачем это нужно:
- * Кнопка "Обновить список устройств" вызывает reloadIniFilesFromDisk,
- * которая перечитывает содержимое уже ИЗВЕСТНЫХ файлов (для отслеживания
- * изменений из внешнего редактора). Но если пользователь добавил в Devices
- * новый файл или целую подпапку через файловый менеджер, reload её не видит:
- * в fileStore нет записи про этот файл, значит и перечитывать нечего.
- *
- * Эта функция закрывает пробел: сканирует папку Devices (как при старте
- * приложения), сравнивает с известными путями в fileStore и подгружает
- * только новые файлы. Существующие НЕ трогает — их обрабатывает
- * reloadIniFilesFromDisk отдельным вызовом.
- *
- * Возвращает количество добавленных файлов.
- */
-export async function addNewDevicesFromDisk(appState: AppState): Promise<number> {
-    // Запрашиваем у Rust полный список файлов в папке Devices вместе
-    // с содержимым (та же команда, что при старте приложения).
-    const files = await invoke<IniFileInfo[]>('scan_devices_folder');
-    if (!files || files.length === 0) {
-        // На диске файлов нет — сессионный набор тоже можно очистить:
-        // если пользователь потом добавит файл с тем же путём, он снова
-        // будет распознан как новый.
-        addedPathsThisSession.clear();
-        return 0;
-    }
-
-    // Полный путь к корню Devices — чтобы сформировать полный путь
-    // каждого файла для сравнения (в fileStore хранятся абсолютные пути).
-    const devicesPath = await invoke<string | null>('get_devices_folder_path');
-    if (!devicesPath) {
-        console.warn('[autoloader] addNewDevicesFromDisk: папка Devices не найдена');
-        return 0;
-    }
-
-    // Собираем множество путей, которые СЕЙЧАС реально есть на диске.
-    // Оно используется, чтобы «подчистить» addedPathsThisSession: если
-    // файл был удалён из папки Devices, его путь должен исчезнуть и из
-    // сессионного набора. Иначе при повторном добавлении того же файла
-    // (тот же путь) функция считала бы его «уже известным» и не сообщала
-    // пользователю об изменении.
-    const diskPaths = new Set<string>();
-    for (const info of files) {
-        diskPaths.add(`${devicesPath}/${info.relative_path}`);
-    }
-    for (const p of Array.from(addedPathsThisSession)) {
-        if (!diskPaths.has(p)) addedPathsThisSession.delete(p);
-    }
-
-    // Собираем множество уже известных путей из двух источников:
-    //  1. addedPathsThisSession — пути, добавленные этой функцией
-    //     в текущей сессии (после синхронизации с диском выше).
-    //     Страхует от повторного подсчёта, если запись в fileStore
-    //     была потеряна из-за совпадения ключа `location::id`
-    //     у нескольких файлов.
-    //  2. fileStore — записи, добавленные ранее (например, при
-    //     старте приложения через autoLoadDevicesFolder).
-    // Сравнение идёт именно по пути, а не по имени: имена могут
-    // повторяться в разных подпапках (например, "00000056.ini" в
-    // локациях "Огонь" и "Вода" одновременно).
-    const knownPaths = new Set<string>(addedPathsThisSession);
-    const store = getFileStore();
-    for (const entry of store.values()) {
-        if (entry.path) knownPaths.add(entry.path);
-    }
-
-    let added = 0;
-
-    for (const info of files) {
-        const fullPath = `${devicesPath}/${info.relative_path}`;
-
-        // Файл уже загружен — не трогаем, его перечитает reloadIniFilesFromDisk.
-        if (knownPaths.has(fullPath)) continue;
-
-        try {
-            // Нормализуем байты (как в autoLoadDevicesFolder).
-            const raw = info.bytes instanceof Uint8Array
-                ? info.bytes
-                : Uint8Array.from(info.bytes);
-            const safe = new Uint8Array(raw);
-
-            // Декодируем windows-1251 штатной функцией проекта.
-            const content = decodeTextBuffer(safe.buffer as ArrayBuffer);
-
-            // Создаём File-объект, совместимый с конвейером.
-            const file = new File([safe], info.name, {
-                lastModified: info.last_modified_ms,
-            });
-
-            // Прогоняем через тот же конвейер, что и при старте, —
-            // запись попадёт в реестр, дерево, таблицу и осциллограф.
-            await processSingleFileContent(
-                content,
-                info.name,
-                appState,
-                file,
-                undefined,
-                undefined,
-                fullPath,
-            );
-            added++;
-            // Запоминаем путь — повторный клик по «Обновить список»
-            // не должен посчитать этот файл «новым» снова, даже если
-            // запись в fileStore была перезаписана другой с таким же
-            // ключом location::id.
-            addedPathsThisSession.add(fullPath);
-            console.log(`[autoloader] addNewDevicesFromDisk: добавлен ${fullPath}`);
-        } catch (err) {
-            // Ошибка одного файла не должна останавливать остальные.
-            console.error(
-                `[autoloader] Ошибка загрузки нового файла ${info.relative_path}:`,
-                err,
-            );
-        }
-    }
-
-    return added;
 }

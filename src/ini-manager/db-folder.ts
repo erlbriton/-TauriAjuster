@@ -291,11 +291,3 @@ export async function changeDbFolder(): Promise<DbDirectoryHandleLike | null> {
         return null;
     }
 }
-
-/**
- * Сохраняет ручку папки как общую папку базы.
- * Вызывается из openIniFolder после успешного выбора (на Linux).
- */
-export async function saveDbFolderHandle(handle: FileSystemDirectoryHandle): Promise<void> {
-    await idbSet(HANDLE_KEY, handle);
-}

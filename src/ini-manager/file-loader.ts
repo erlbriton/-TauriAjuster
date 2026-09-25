@@ -2,7 +2,6 @@
 
 import { showIdModal, populateDeviceForm, showCompactError, openIniEditor } from '../ui/ui.js';
 import { encodeToWindows1251 } from '../core/encoding.js';
-import { saveDbFolderHandle } from './db-folder.js';
 import { addDeviceToRegistry, deviceRegistry, setCurrentIniConfig, updateDeviceInRegistry, removeDeviceFromRegistry } from './tree-core.js';
 import type { RawIniConfig, DeviceRegistryItem } from './tree-core.js';
 import { renderDeviceTree } from './tree-ui.js';
