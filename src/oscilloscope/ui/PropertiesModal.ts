@@ -21,6 +21,15 @@ export class PropertiesModal {
     private onApplyCallback?: (newVisibleChannels: Channel[]) => void;
     private onSettingsApplyCallback?: (settings: { pollDelayMs: number }) => void;
 
+    /**
+     * Текущий активный режим отображения параметров: RAM или XRAM.
+     * Влияет только на подсветку кнопок RAM/XRAM в футере — логику
+     * фильтрации параметров по режиму добавим позже. Состояние живёт
+     * в памяти: переживает открытие/закрытие окна, но сбрасывается
+     * при перезапуске приложения на значение по умолчанию (RAM).
+     */
+    private currentMode: 'RAM' | 'XRAM' = 'RAM';
+
     constructor() {
         this.overlay = document.createElement('div');
         this.overlay.className = 'modal-overlay properties-modal-overlay';
@@ -34,6 +43,29 @@ export class PropertiesModal {
 
         this.renderSkeleton();
         this.bindEvents();
+
+        // Применяем текущее состояние (RAM по умолчанию) к уже отрисованным
+        // кнопкам. Нужно, потому что разметка в renderSkeleton всегда создаёт
+        // RAM с классом primary, а currentMode может быть переключён (в том
+        // числе в будущем — при загрузке из настроек).
+        this.setMode(this.currentMode);
+    }
+
+    /**
+     * Переключает активный режим отображения параметров.
+     * Активная кнопка получает класс primary (как «Применить»),
+     * пассивная — теряет его (как «Отмена»).
+     */
+    private setMode(mode: 'RAM' | 'XRAM'): void {
+        this.currentMode = mode;
+        const ramBtn = this.modal.querySelector('#prop-mode-ram') as HTMLButtonElement | null;
+        const xramBtn = this.modal.querySelector('#prop-mode-xram') as HTMLButtonElement | null;
+        if (ramBtn) {
+            ramBtn.classList.toggle('primary', mode === 'RAM');
+        }
+        if (xramBtn) {
+            xramBtn.classList.toggle('primary', mode === 'XRAM');
+        }
     }
 
     public onApply(cb: (newVisibleChannels: Channel[]) => void): void {
@@ -112,8 +144,14 @@ export class PropertiesModal {
                     <label class="prop-settings-label" for="prop-poll-delay">Пауза (мс):</label>
                     <input class="prop-settings-input" type="number" id="prop-poll-delay" min="1" max="200" value="20" />
                 </div>
-                <button class="toolbar-btn primary" id="prop-apply-btn">Применить</button>
-                <button class="toolbar-btn" id="prop-cancel-btn">Отмена</button>
+                <div class="prop-mode-group">
+                    <button class="toolbar-btn prop-mode-btn primary" id="prop-mode-ram" type="button">RAM</button>
+                    <button class="toolbar-btn prop-mode-btn" id="prop-mode-xram" type="button">XRAM</button>
+                </div>
+                <div class="prop-footer-actions">
+                    <button class="toolbar-btn primary" id="prop-apply-btn">Применить</button>
+                    <button class="toolbar-btn" id="prop-cancel-btn">Отмена</button>
+                </div>
             </div>
         `;
 
@@ -154,6 +192,11 @@ export class PropertiesModal {
 
         this.modal.querySelector('#prop-invert-left')?.addEventListener('click', () => this.invertSelection('left'));
         this.modal.querySelector('#prop-invert-right')?.addEventListener('click', () => this.invertSelection('right'));
+
+        // Кнопки выбора режима RAM/XRAM. Пока переключают только подсветку —
+        // логику фильтрации параметров по режиму добавим позже.
+        this.modal.querySelector('#prop-mode-ram')?.addEventListener('click', () => this.setMode('RAM'));
+        this.modal.querySelector('#prop-mode-xram')?.addEventListener('click', () => this.setMode('XRAM'));
     }
 
     private updateLists(): void {

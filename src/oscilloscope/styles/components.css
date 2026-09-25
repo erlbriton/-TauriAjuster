@@ -337,10 +337,15 @@ input[type="number"].form-input {
     box-shadow: 0 0 8px rgba(0, 210, 255, 0.4);
 }
 
+/* Футер окна «Свойства просмотра параметров».
+   Grid из трёх колонок: слева — «Пауза», по центру — RAM/XRAM,
+   справа — «Применить / Отмена». Центральная колонка auto по ширине
+   своего содержимого, крайние — по 1fr, что гарантирует центрирование
+   RAM/XRAM независимо от ширины левого и правого блоков. */
 .properties-modal-footer {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: flex-end;
     gap: 12px;
     padding: 12px 20px;
     background: #1a1a1d;
@@ -351,7 +356,28 @@ input[type="number"].form-input {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-right: auto;
+    justify-self: start;
+}
+
+/* Группа кнопок RAM/XRAM — по центру футера. */
+.prop-mode-group {
+    display: flex;
+    gap: 12px;
+    justify-self: center;
+}
+
+/* Кнопки RAM/XRAM: ширина такая же, как у «Применить».
+   Точное значение подберём после первого визуального теста —
+   стартовое значение 100px. */
+.prop-mode-btn {
+    min-width: 100px;
+}
+
+/* Правая группа: «Применить» и «Отмена» — в правом углу футера. */
+.prop-footer-actions {
+    display: flex;
+    gap: 12px;
+    justify-self: end;
 }
 
 .prop-settings-label {
