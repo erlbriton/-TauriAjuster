@@ -101,9 +101,10 @@ export function showFwUpdateModal(info: FwUpdateInfo): void {
     const idLine = info.idLine || `${info.deviceType} v${info.deviceVersion} ${info.firmwareVersion} ${info.firmwareDate}`;
     set('fwUpdateId', idLine);
     set('fwUpdateType', info.deviceType);
+    // В окне теперь одна строка — «Версия прошивки», показывает deviceVersion
+    // (например, "1.10.6.1"). Поля firmwareVersion (дата) и firmwareDate (URL)
+    // удалены из разметки как вводящие в заблуждение.
     setText('fwUpdateDevVersion', info.deviceVersion);
-    setText('fwUpdateFwVersion', info.firmwareVersion);
-    setText('fwUpdateFwDate', info.firmwareDate);
 
     // Заполняем <select> шаблонов из папки TemplateDevice.
     // Функция асинхронная (сканирует папку через Rust), но окно можно
