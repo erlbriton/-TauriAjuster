@@ -251,8 +251,13 @@ export function initSearchNavigationUI(deps: SearchNavigationUIDeps): void {
     processSingleFileContent(content, fileName, appState, file, handle, undefined, path)
   );
   
-  setBackupLoadFn((content, fileName, file, handle) => 
-    processSingleFileContent(content, fileName, appState, file, handle)
+  // Пятый параметр `path` — абсолютный путь к файлу на диске в нативном
+  // режиме (Tauri). В браузере он всегда undefined, в Tauri приходит из
+  // backup-ui после успешной записи файла в Devices. Через
+  // processSingleFileContent путь попадает в currentIniPath (file-loader.ts)
+  // и используется save-ini.ts при сохранении изменений.
+  setBackupLoadFn((content, fileName, file, handle, path) =>
+    processSingleFileContent(content, fileName, appState, file, handle, undefined, path)
   );
 
   // Глобальный обработчик F1 для справки

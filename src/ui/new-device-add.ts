@@ -631,8 +631,16 @@ export async function handleAddToBase(): Promise<void> {
 }
 
 /**
- * Вставляет/заменяет в секции [DEVICE] шаблона строки
- * ID=, Location=, Description= (последние две — если значения не пустые).
+ * Вставляет/заменяет в секции [DEVICE] шаблона строки ID=, Location=, Description=.
+ *
+ * Особенности:
+ *  - ID= всегда заменяется на полную строку подключённого контроллера;
+ *  - Location= и Description= присутствуют в [DEVICE] ВСЕГДА, даже если
+ *    значения из полей пустые (тогда строки будут вида "Location=" без
+ *    значения). Это соглашение структуры INI-файлов проекта — см. также
+ *    buildBackupContent в backup-ui.ts, где применена та же логика;
+ *  - если в шаблоне строки не было — она добавляется в конец [DEVICE];
+ *  - если в шаблоне вообще нет секции [DEVICE] — создаём её целиком.
  */
 function buildDeviceIniContent(
     templateText: string,
@@ -650,8 +658,8 @@ function buildDeviceIniContent(
 
     const flushMissing = (): void => {
         if (!idDone) out.push(`ID=${idText}`);
-        if (location && !locDone) out.push(`Location=${location}`);
-        if (description && !descDone) out.push(`Description=${description}`);
+        if (!locDone) out.push(`Location=${location}`);
+        if (!descDone) out.push(`Description=${description}`);
     };
 
     for (const line of lines) {
@@ -671,12 +679,12 @@ function buildDeviceIniContent(
                 idDone = true;
                 continue;
             }
-            if (key === 'location' && location) {
+            if (key === 'location') {
                 out.push(`Location=${location}`);
                 locDone = true;
                 continue;
             }
-            if (key === 'description' && description) {
+            if (key === 'description') {
                 out.push(`Description=${description}`);
                 descDone = true;
                 continue;
@@ -686,11 +694,13 @@ function buildDeviceIniContent(
     }
     if (inDevice) flushMissing();
     if (!deviceSeen) {
+        // В шаблоне не было секции [DEVICE] — создаём с нуля.
+        // Location= и Description= пишем всегда, даже если пустые.
         out.unshift(
             '[DEVICE]',
             `ID=${idText}`,
-            ...(location ? [`Location=${location}`] : []),
-            ...(description ? [`Description=${description}`] : []),
+            `Location=${location}`,
+            `Description=${description}`,
             '',
         );
     }
