@@ -283,6 +283,11 @@ export function initUI(deps: UiManagerDeps): void {
 
       let fwUpdateCandidate: string | null = null;
       for (const device of getAllDevices()) {
+        // Пропускаем резервные копии (красные записи): это архивные
+        // копии файлов из папки BackUp, они не должны участвовать
+        // в поиске — ни как родной INI, ни как кандидат на апдейт.
+        if (device.isBackup) continue;
+
         const candidate = device.iniConfig?.device?.id;
         if (!candidate) continue;
         const parsed = parseDeviceIdString(candidate);

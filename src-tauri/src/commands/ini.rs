@@ -464,12 +464,60 @@ pub fn scan_template_dir() -> Result<Vec<String>, String> {
         // Стабильный порядок — алфавитный.
     names.sort();
 
-    eprintln!(
+       eprintln!(
         "[RUST] scan_template_dir: найдено {} шаблон(ов)",
         names.len()
     );
     Ok(names)
 }
+
+/// Команда: вернуть список имён файлов из папки BackUp рядом с exe.
+///
+/// Возвращает только ИМЕНА файлов (не полные пути, не содержимое).
+/// Используется при синхронизации дерева с диском: если для «красной»
+/// записи (isBackup = true) файла в BackUp больше нет — запись удаляется.
+///
+/// Если папки BackUp нет — возвращает пустой массив, без ошибки.
+/// Это нормально: пользователь мог её ещё не создавать или удалить вручную.
+#[tauri::command]
+pub fn scan_backup_dir() -> Result<Vec<String>, String> {
+    eprintln!("[RUST] scan_backup_dir: вызов команды");
+
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {}", e))?;
+    let exe_dir = exe_path
+        .parent()
+        .ok_or_else(|| "У пути к исполняемому файлу нет родительской папки".to_string())?;
+    let backup_dir = exe_dir.join("BackUp");
+
+    // Папки нет — возвращаем пустой список, это не ошибка.
+    if !backup_dir.is_dir() {
+        eprintln!("[RUST] scan_backup_dir: папки BackUp нет, возвращаем пустой список");
+        return Ok(Vec::new());
+    }
+
+    let entries = fs::read_dir(&backup_dir)
+        .map_err(|e| format!("Не удалось прочитать папку {}: {}", backup_dir.display(), e))?;
+
+    let mut names: Vec<String> = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        // Только обычные файлы — подпапки пропускаем.
+        if path.is_file() {
+            names.push(entry.file_name().to_string_lossy().into_owned());
+        }
+    }
+
+    names.sort();
+
+    eprintln!(
+        "[RUST] scan_backup_dir: найдено {} файл(ов)",
+        names.len()
+    );
+    Ok(names)
+}
+
 
 /// Команда: скопировать выбранный пользователем файл в папку TemplateDevice.
 ///

@@ -22,6 +22,7 @@ import {
 } from './file-loader.js';
 import { decodeTextBuffer } from './textFileReader.js';
 import {
+    deviceRegistry,
     addDeviceToRegistry,
     updateDeviceInRegistry,
     removeDeviceFromRegistry,
@@ -193,6 +194,37 @@ export async function resyncDevicesFromDisk(appState: AppState): Promise<{
         // Папки Devices нет — ничего синхронизировать не с чем.
         // Все известные записи в fileStore будут удалены ниже (файлов нет).
         devicesPath = '';
+    }
+
+    // ─── Шаг 1.5: синхронизируем «красные» записи с папкой BackUp ───────────
+    // Записи с isBackup === true в deviceRegistry — это отражение файлов
+    // из папки BackUp. Если файла там больше нет — запись должна исчезнуть
+    // из дерева. Без этой проверки красные записи накапливаются: пользователь
+    // может удалить файл из BackUp через файловый менеджер, а запись останется.
+    let backupNames: string[] = [];
+    try {
+        backupNames = await window.__TAURI__.core.invoke<string[]>('scan_backup_dir');
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        result.errors.push(`Сканирование BackUp не удалось: ${msg}`);
+    }
+    const backupSet = new Set(backupNames);
+
+    for (const loc of Object.keys(deviceRegistry)) {
+        const group = deviceRegistry[loc];
+        if (!Array.isArray(group)) continue;
+        for (const item of [...group]) {
+            if (!item.isBackup) continue;
+            const fileName = item.backupFileName;
+            // Удаляем запись, если:
+            //  - backupFileName не задан (запись из старой версии без поля);
+            //  - имя файла не найдено среди реальных файлов в BackUp.
+            if (!fileName || !backupSet.has(fileName)) {
+                console.log(`[file-sync] Удаляем устаревшую backup-запись ${item.id} (файл ${fileName ?? '—'})`);
+                removeDeviceFromRegistry(loc, item.id);
+                result.removed++;
+            }
+        }
     }
 
     // ─── Шаг 2: строим карту «полный путь на диске → данные файла» ──────────

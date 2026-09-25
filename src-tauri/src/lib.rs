@@ -42,6 +42,7 @@ pub fn run() {
             commands::ini::ensure_template_dir,
             commands::ini::scan_template_dir,
             commands::ini::copy_template_file,
+            commands::ini::scan_backup_dir,
             commands::fs::ensure_records_dir,
             commands::fs::delete_file_from_disk,
             commands::ini::read_ini_file,

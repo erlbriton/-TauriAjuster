@@ -16,7 +16,7 @@
  */
 
 import { parseDeviceIdString } from '../core/report-data.js';
-import { getAllDevices } from '../ini-manager/tree-core.js';
+import { getAllDevices, deviceRegistry, removeDeviceFromRegistry } from '../ini-manager/tree-core.js';
 import { showIdModal } from './ui.js';
 import {
     ensureDbFolder,
@@ -350,15 +350,39 @@ export async function handleAddToBaseGeneric(src: AddToBaseSource): Promise<void
             //    устройством нельзя. Актуальный путь для новой версии появится
             //    ниже, при регистрации через addToLoadedFnUpdate.
             if (src.oldFileName) {
+                // 5a. Сначала убираем из дерева все устаревшие красные записи
+                //     для этого же файла BackUp. Такие записи остаются от
+                //     предыдущих апдейтов того же устройства: файл в BackUp
+                //     уже перезаписан новым, показывать старый снимок больше
+                //     нечего. Без этой чистки красные записи копятся в дереве,
+                //     хотя в папке BackUp всегда лежит один файл.
+                for (const loc of Object.keys(deviceRegistry)) {
+                    const group = deviceRegistry[loc];
+                    if (!Array.isArray(group)) continue;
+                    for (const item of [...group]) {
+                        if (item.isBackup && item.backupFileName === src.oldFileName) {
+                            console.log(`[new-device] Tauri: удаляем устаревшую красную запись ${item.id} (файл ${src.oldFileName})`);
+                            removeDeviceFromRegistry(loc, item.id);
+                        }
+                    }
+                }
+
+                // 5b. Теперь помечаем текущую запись как backup.
                 const store = getFileStore();
                 for (const [key, e] of Array.from(store.entries())) {
                     if (e.file && e.file.name === src.oldFileName) {
                         // Находим соответствующий узел дерева по id из fileStore
                         // и помечаем его как backup — он отрисуется красным.
+                        // Запоминаем имя файла в BackUp (backupFileName) —
+                        // это связь между записью в дереве и реальным файлом
+                        // в папке BackUp. Понадобится при синхронизации
+                        // с диском (кнопка «Обновить список»), чтобы удалять
+                        // красные записи, чьих файлов там уже нет.
                         const item = getAllDevices().find((d) => d.iniConfig?.device?.id === e.id);
                         if (item) {
                             item.isBackup = true;
-                            console.log(`[new-device] Tauri: старуе устройство ${e.id} помечено как backup`);
+                            item.backupFileName = src.oldFileName;
+                            console.log(`[new-device] Tauri: старуе устройство ${e.id} помечено как backup (файл ${src.oldFileName})`);
                         }
                         store.delete(key);
                     }
