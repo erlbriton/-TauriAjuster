@@ -274,20 +274,3 @@ export async function downloadFallback(name: string, content: Uint8Array<ArrayBu
     }
 }
 
-/**
- * Принудительно спрашивает новую папку базы и запоминает её.
- * Вызывать только внутри пользовательского клика (диалог открытия).
- */
-export async function changeDbFolder(): Promise<DbDirectoryHandleLike | null> {
-    const picker = (window as WindowWithPicker).showDirectoryPicker;
-    if (typeof picker !== 'function') return null;
-    try {
-        const handle = await picker.call(window, { mode: 'readwrite' });
-        if (!handle) return null;
-        await idbSet(HANDLE_KEY, handle);
-        return handle;
-    } catch {
-        // пользователь отменил выбор
-        return null;
-    }
-}

@@ -7,7 +7,6 @@
  * Поведение кнопок (резерв, добавление в базу, шаблоны) — следующие шаги.
  */
 import { parseDeviceIdString } from '../core/report-data.js';
-import { changeDbFolder } from '../ini-manager/db-folder.js';
 import { showBackupWindow } from './backup-ui.js';
 // Логика «Добавить в базу» вынесена в отдельный модуль (см. src/ui/new-device-add.ts).
 // Здесь от неё нужна только точка входа — обработчик кнопки в окне.
@@ -199,22 +198,6 @@ export function initNewDeviceUI(): void {
         showBackupWindow();
     });
 
-    // "Сменить папку базы…": принудительно выбрать и запомнить новую папку.
-    // Ближайшее нажатие "Добавить устройство в базу" запишет уже в неё.
-    document.getElementById('newDeviceChangeFolderBtn')?.addEventListener('click', () => {
-        void (async () => {
-            const handle = await changeDbFolder();
-            setNewDeviceStatus(handle ? 'Папка базы изменена.' : 'Папка не изменена (выбор отменён).');
-        })();
-    });
-    // "Сменить папку базы…": принудительно выбрать и запомнить новую папку.
-    // Ближайшее нажатие "Добавить устройство в базу" запишет уже в неё.
-    document.getElementById('newDeviceChangeFolderBtn')?.addEventListener('click', () => {
-        void (async () => {
-            const handle = await changeDbFolder();
-            setNewDeviceStatus(handle ? 'Папка базы изменена.' : 'Папка не изменена (выбор отменён).');
-        })();
-    });
     document.getElementById('newDeviceAddBtn')?.addEventListener('click', () => {
         void handleAddToBase();
     });
