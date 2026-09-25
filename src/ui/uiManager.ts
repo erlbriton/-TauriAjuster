@@ -29,8 +29,6 @@ import { initParamPropertiesUI } from './param-properties-ui.js';
 import { SearchPanel } from '../oscilloscope/ui/SearchPanel.js';
 import { initHelpUI , showHelpWindow } from './help-ui.js';
 import { hasAnyDirty } from '../ini-manager/dirty-tracker.js';
-import { forcePickParentFolder } from '../ini-manager/db-folder.js';
-import { showConfirmDialog } from './confirm-dialog.js';
 import { initSerialPortUI } from './manager/serial-port.js';
 import { initDeviceManagementUI } from './manager/device-management.js';
 import { initOscilloscopeUI } from './manager/oscilloscope-ui.js';
@@ -85,24 +83,12 @@ export interface UiManagerDeps {
 export function initUI(deps: UiManagerDeps): void {
     // В Tauri-версии папка Devices автоматически подхватывается автозагрузчиком
     // (src/core/platform/tauri-autoloader.ts), поэтому диалог выбора при старте не нужен.
-    // Код оставлен закомментированным для возможной браузерной совместимости.
-    /*
-    void (async () => {
-        console.log('[startup] спрашиваю родительскую папку');
-        const ok = await showConfirmDialog(
-            'Выберите папку с *.ini файлами'
-        );
-        if (ok) await forcePickParentFolder();
-    })();
-    */
   const {
     serial, appState, parser, view, buffers,
     updateComInterfaceName,
     executeDeviceConnection, executeDeviceIdentification, readLoop, showIdModal, updateDeviceRegisters
   } = deps;
   let isManualDisconnect = false;
-  const filePicker = document.getElementById('filePicker') as HTMLInputElement | null;
-  const folderPicker = document.getElementById('folderPicker') as HTMLInputElement | null;
   const idBtn = document.getElementById("idBtn") as HTMLButtonElement | null;
   const connectBtn = document.getElementById("connectBtn") as HTMLButtonElement | null;
   const comSelect = document.getElementById("comSelect") as HTMLSelectElement | null;
@@ -153,8 +139,6 @@ export function initUI(deps: UiManagerDeps): void {
     executeDeviceIdentification,
     restoreConnection
   });
-
- // if (folderPicker && typeof setupFolderHandling === 'function') setupFolderHandling(folderPicker);
 
   // Обёртка loadIniContent — типизирована через IOscilloscopeApi
   if (view && typeof view.loadIniContent === 'function' && !(view as unknown as Record<string, unknown>).__loadIniContentWrapped) {
