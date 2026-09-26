@@ -256,3 +256,45 @@ export function openIniEditor(content: string, title: string): Promise<string | 
         document.addEventListener('keydown', onKey);
     });
 }
+
+/**
+ * Короткое уведомление по центру экрана, само исчезает через 3 секунды.
+ *
+ * Используется для сообщений об успехе (например, «Файл сохранён»),
+ * когда модальное окно с кнопкой "OK" избыточно. Автоматически
+ * закрывается по таймеру, не требует действия пользователя.
+ *
+ * Стиль заимствован у showIdModal (те же CSS-классы .id-modal-*),
+ * но без кнопки "OK" и с авто-закрытием. Внешний класс overlay —
+ * свой (.app-toast-overlay), чтобы не конфликтовать с showIdModal,
+ * если оба показываются одновременно.
+ */
+export function showToast(text: string): void {
+    const existing = document.querySelector('.app-toast-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'app-toast-overlay';
+    // Стили overlay берём от .id-modal-overlay через инлайн —
+    // подстраховка на случай, если в CSS класс .app-toast-overlay не описан.
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.zIndex = '10001';
+
+    const modal = document.createElement('div');
+    modal.className = 'id-modal';  // переиспользуем стиль модалки из showIdModal
+
+    modal.innerHTML = `
+        <div class="id-modal-content">
+            <span class="id-modal-text">${text}</span>
+        </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    // Автоудаление через 3 секунды.
+    setTimeout(() => {
+        overlay.remove();
+    }, 3000);
+}

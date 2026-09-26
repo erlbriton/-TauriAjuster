@@ -611,3 +611,36 @@ pub fn copy_template_file(src_path: String, overwrite: bool) -> Result<String, S
 
     Ok(file_name)
 }
+
+/// Команда: вернуть путь к папке XLT рядом с exe и создать её, если нет.
+///
+/// XLT — папка для готовых отчётов (.xlsx, .csv). Лежит рядом с Devices,
+/// BackUp и TemplateDevice. Создаётся молча, без диалогов: это папка
+/// результатов работы приложения, её отсутствие — нормальная ситуация.
+#[tauri::command]
+pub fn ensure_xlt_dir() -> Result<String, String> {
+    eprintln!("[RUST] ensure_xlt_dir: вызов команды");
+
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {}", e))?;
+    let exe_dir = exe_path
+        .parent()
+        .ok_or_else(|| "У пути к исполняемому файлу нет родительской папки".to_string())?;
+    let xlt_dir = exe_dir.join("XLT");
+
+    if !xlt_dir.is_dir() {
+        fs::create_dir_all(&xlt_dir).map_err(|e| {
+            format!(
+                "Не удалось создать папку '{}': {}",
+                xlt_dir.display(),
+                e
+            )
+        })?;
+        eprintln!(
+            "[RUST] ensure_xlt_dir: создана папка '{}'",
+            xlt_dir.display()
+        );
+    }
+
+    Ok(xlt_dir.to_string_lossy().into_owned())
+}

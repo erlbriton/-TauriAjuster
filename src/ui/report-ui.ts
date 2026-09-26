@@ -7,6 +7,8 @@ import { collectReportData, collectCsvData } from '../core/report-data.js';
 import { buildReportBlob } from '../core/excel-report.js';
 import { buildCsvBlob } from '../core/csv-export.js';
 import type { ReportData } from '../core/excel-report.js';
+import { showToast } from './ui.js';
+
 
 const LS_KEY_ORG = 'report:organization';
 const LS_KEY_NUM = 'report:lastNumber';
@@ -255,44 +257,34 @@ async function saveReport(): Promise<void> {
         return;
     }
 
-    const picker = (window as { showSaveFilePicker?: (opts: unknown) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
+    // Генерируем имя файла по шаблону otchet_<серийный>_<дата_время>.xlsx
+    const now = new Date();
+    const pad = (n: number): string => String(n).padStart(2, '0');
+    const dateStr = `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+    const serial = lastGeneratedData?.serialNumber || 'unknown';
+    const fileName = `otchet_${serial}_${dateStr}.xlsx`;
 
-    if (typeof picker === 'function') {
-        try {
-            const handle = await picker({
-                suggestedName: DEFAULT_FILE_NAME,
-                types: [
-                    {
-                        description: 'Excel Workbook',
-                        accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] },
-                    },
-                ],
-            });
-            const writable = await handle.createWritable();
-            await writable.write(lastGeneratedBlob);
-            await writable.close();
-            setStatus('Файл сохранён.');
-            return;
-        } catch (err) {
-            if (err instanceof Error && err.name === 'AbortError') {
-                // Пользователь отменил диалог
-                return;
-            }
-            // Fallback — если picker упал (например, не поддерживается)
-            console.warn('[report-ui] showSaveFilePicker failed, fallback to download:', err);
-        }
+    try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const { writeFile } = await import('@tauri-apps/plugin-fs');
+
+        // Путь к папке XLT рядом с exe (создаётся автоматически).
+        const xltDir = await invoke<string>('ensure_xlt_dir');
+        const fullPath = `${xltDir}/${fileName}`;
+
+        // Blob → Uint8Array<ArrayBuffer>, чтобы writeFile принял его без ошибок типов.
+        const buffer = await lastGeneratedBlob.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+
+        await writeFile(fullPath, bytes);
+
+        showToast(`Файл сохранён: ${fileName}`);
+        console.log(`[report-ui] XLSX сохранён: ${fullPath}`);
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[report-ui] Ошибка сохранения XLSX:', err);
+        showToast(`Ошибка сохранения: ${msg}`);
     }
-
-    // Fallback — скачать через <a download>
-    const url = URL.createObjectURL(lastGeneratedBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = DEFAULT_FILE_NAME;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setStatus('Файл скачан.');
 }
 /**
  * Экспорт CSV-отчёта: секция RAM, значения на момент стопа/маркера.
@@ -329,54 +321,30 @@ async function exportCsv(): Promise<void> {
             osc.allChannels,
         );
 
-        const blob = buildCsvBlob(data);
+                const blob = buildCsvBlob(data);
 
-        // Имя файла по умолчанию: otchet_<серийный>_<дата_время>.csv
+        // Имя файла по шаблону: otchet_<серийный>_<дата_время>.csv
         const now = new Date();
         const pad = (n: number): string => String(n).padStart(2, '0');
-        const dateStr = `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+        const dateStr = `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${pad(now.getFullYear())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
         const serial = data.serialNumber || 'unknown';
-        const suggestedName = `otchet_${serial}_${dateStr}.csv`;
+        const fileName = `otchet_${serial}_${dateStr}.csv`;
 
-        const picker = (window as { showSaveFilePicker?: (opts: unknown) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
+        const { invoke } = await import('@tauri-apps/api/core');
+        const { writeFile } = await import('@tauri-apps/plugin-fs');
 
-        if (typeof picker === 'function') {
-            try {
-                const handle = await picker({
-                    suggestedName,
-                    types: [
-                        {
-                            description: 'CSV (разделитель ;)',
-                            accept: { 'text/csv': ['.csv'] },
-                        },
-                    ],
-                });
-                const writable = await handle.createWritable();
-                await writable.write(blob);
-                await writable.close();
-                console.log('[report-ui] CSV сохранён:', suggestedName);
-                return;
-            } catch (err) {
-                if (err instanceof Error && err.name === 'AbortError') {
-                    return; // Пользователь отменил
-                }
-                // Ошибка (не отмена) — показываем и выходим, БЕЗ fallback
-                console.error('[report-ui] showSaveFilePicker failed:', err);
-                alert('Ошибка при сохранении файла: ' + (err instanceof Error ? err.message : String(err)));
-                return;
-            }
-        }
+        // Путь к папке XLT рядом с exe (создаётся автоматически).
+        const xltDir = await invoke<string>('ensure_xlt_dir');
+        const fullPath = `${xltDir}/${fileName}`;
 
-        // Fallback — скачать через <a download>
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = suggestedName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-               console.log('[report-ui] CSV скачан:', suggestedName);
+        // Blob → Uint8Array<ArrayBuffer>, чтобы writeFile принял его без ошибок типов.
+        const buffer = await blob.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+
+        await writeFile(fullPath, bytes);
+
+        console.log(`[report-ui] CSV сохранён: ${fullPath}`);
+        showToast(`Файл сохранён: ${fileName}`);
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error('[report-ui] exportCsv error:', msg);
