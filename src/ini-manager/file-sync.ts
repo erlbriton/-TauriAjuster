@@ -1,13 +1,9 @@
 // src/ini-manager/file-sync.ts
 // Синхронизация состояния приложения с папкой Devices на диске.
 //
-// Модуль содержит две функции:
-//  - reloadIniFilesFromDisk — «лёгкая» синхронизация: проходит по уже
-//    известным файлам (fileStore) и перечитывает их содержимое с диска.
-//    Не обнаруживает новые или удалённые файлы;
-//  - resyncDevicesFromDisk — «полная» синхронизация: сканирует папку
-//    Devices целиком и приводит состояние в памяти (fileStore,
-//    deviceRegistry) в соответствие с тем, что реально на диске.
+// Содержит одну функцию — resyncDevicesFromDisk: сканирует папку Devices
+// целиком и приводит состояние в памяти (fileStore, deviceRegistry)
+// в соответствие с тем, что реально на диске.
 //
 // Принцип: единственный источник истины — файлы на диске.
 
@@ -17,7 +13,6 @@ import type { AppState } from '../core/app-state.js';
 import { fileStore, getFileStore } from './file-store.js';
 import {
     processSingleFileContent,
-    readFileAsText,
     syncFilesToOscilloscope,
 } from './file-loader.js';
 import { decodeTextBuffer } from './textFileReader.js';
