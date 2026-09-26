@@ -13,10 +13,6 @@ export function isLinux(): boolean {
     return ua.includes('linux') || platform.includes('linux');
 }
 
-export function supportsDirectoryPicker(): boolean {
-    return isLinux() && typeof (window as unknown as { showDirectoryPicker?: unknown }).showDirectoryPicker === 'function';
-}
-
 /** Работаем ли мы внутри нативной оболочки (Tauri) */
 export function isNativeApp(): boolean {
     return typeof (window as unknown as { __TAURI__?: unknown }).__TAURI__ !== 'undefined';

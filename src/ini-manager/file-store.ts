@@ -3,18 +3,11 @@
 //
 // Отвечает ТОЛЬКО за хранение:
 //  - карта «ключ → запись» для всех загруженных INI-файлов (fileStore);
-//  - хэндлы открытых файлов (iniFileHandles) — для браузерного режима;
-//  - имя и путь текущего открытого файла — для сохранения изменений
+//  - путь к текущему открытому файлу — для сохранения изменений
 //    в нативном режиме (см. save-ini.ts и getCurrentIniFilePath).
 //
 // Этот модуль ничего не знает про парсинг, реестр устройств, рендеринг,
 // осциллограф. Его задача — держать данные и отдавать их по запросу.
-
-/** Хэндлы открытых INI-файлов (имя файла → хэндл) для записи обратно. */
-const iniFileHandles = new Map<string, FileSystemFileHandle>();
-
-/** Имя файла, с которым сейчас работает аджастер. */
-let currentIniFileName: string | null = null;
 
 /** Абсолютный путь к текущему INI-файлу (для нативного сохранения в Tauri). */
 let currentIniPath: string | null = null;
@@ -63,12 +56,6 @@ export function getFileStore(): Map<string, StoredFileEntry> {
     return fileStore;
 }
 
-/** Возвращает хэндл файла, с которым сейчас работает аджастер. */
-export function getCurrentIniFileHandle(): FileSystemFileHandle | null {
-    if (!currentIniFileName) return null;
-    return iniFileHandles.get(currentIniFileName) ?? null;
-}
-
 /**
  * Возвращает абсолютный путь к текущему INI-файлу на диске.
  * Используется в нативном режиме (Tauri) для сохранения изменений.
@@ -78,10 +65,9 @@ export function getCurrentIniFilePath(): string | null {
 }
 
 /**
- * Устанавливает имя и путь текущего открытого INI-файла.
+ * Устанавливает путь к текущему открытому INI-файлу.
  * Вызывается из processSingleFileContent при загрузке нового файла.
  */
-export function setCurrentIniFile(fileName: string | null, path: string | null): void {
-    currentIniFileName = fileName;
+export function setCurrentIniPath(path: string | null): void {
     currentIniPath = path;
 }

@@ -39,7 +39,6 @@ const appState: AppState = {
   slaveAddress: 0x01,
   currentIniContent: null,
   currentIniConfig: null,
-  currentIniFileHandle: null,
   pollDelayMs: 20,
 };
 

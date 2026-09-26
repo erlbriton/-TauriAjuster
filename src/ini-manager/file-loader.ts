@@ -18,13 +18,12 @@ import { decodeTextBuffer } from './textFileReader.js';
 import {
     fileStore,
     getFileStore,
-    getCurrentIniFileHandle,
     getCurrentIniFilePath,
-    setCurrentIniFile,
+    setCurrentIniPath,
 } from './file-store.js';
 import type { StoredFileEntry } from './file-store.js';
 
-export { getFileStore, getCurrentIniFileHandle, getCurrentIniFilePath };
+export { getFileStore, getCurrentIniFilePath };
 export type { StoredFileEntry };
 
 
@@ -51,9 +50,9 @@ export async function processSingleFileContent(
      *  Необязательный параметр: передаётся из Tauri-автозагрузчика. */
     filePath?: string
 ): Promise<void> {
-  // Имя и путь текущего файла хранятся теперь в модуле file-store.ts;
-  // присваиваем через сеттер, а не напрямую — переменные больше не локальные.
-  setCurrentIniFile(fileName, filePath ?? null);
+  // Путь к текущему файлу хранится в модуле file-store.ts;
+  // присваиваем через сеттер, а не напрямую — переменная больше не локальная.
+  setCurrentIniPath(filePath ?? null);
   try {
     if (!content) {
       throw new Error('Файл пуст');

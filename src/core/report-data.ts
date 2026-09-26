@@ -38,16 +38,14 @@ function formatDateTime(ts: number): string {
     );
 }
 
-/** Дата изменения базы — берём из file.lastModified хэндла, если доступен */
+/**
+ * Дата изменения базы — берём из entry.file.lastModified.
+ * В нативном режиме (Tauri) поле handle всегда undefined, поэтому
+ * ветка через handle удалена: она всё равно уходила в fallback.
+ */
 async function getBaseChangeDate(entry: StoredFileEntryForReport | undefined): Promise<string> {
     if (!entry) return '';
     try {
-        if (entry.handle && typeof (entry.handle as { getFile?: () => Promise<File> }).getFile === 'function') {
-            const f = await (entry.handle as { getFile: () => Promise<File> }).getFile();
-            if (f && typeof f.lastModified === 'number' && f.lastModified > 0) {
-                return formatDateTime(f.lastModified);
-            }
-        }
         if (entry.file && typeof entry.file.lastModified === 'number' && entry.file.lastModified > 0) {
             return formatDateTime(entry.file.lastModified);
         }

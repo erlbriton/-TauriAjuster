@@ -220,8 +220,6 @@ export async function resyncDevicesFromDisk(appState: AppState): Promise<{
             const newKey = `${newLoc}::${newId}`;
             store.set(newKey, {
                 file: freshFile,
-                handle: entry.handle,
-                parentHandle: entry.parentHandle,
                 location: newLoc,
                 id: newId,
                 content: diskEntry.content,
