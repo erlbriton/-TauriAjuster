@@ -5,6 +5,9 @@
 // Подмодули: команды Tauri и общее состояние приложения.
 pub mod commands;
 pub mod state;
+// Конфигурация приложения: путь к текущей базовой папке (Devices/,
+// BackUp/, TemplateDevice/ и т.д.). Читается из controllers.txt.
+pub mod app_config;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -19,6 +22,9 @@ pub fn run() {
         // Регистрируем общее состояние serial-порта:
         // теперь все команды видят один и тот же открытый порт
         .manage(state::SerialState::default())
+        // Регистрируем состояние конфигурации: путь к текущей базовой
+        // папке и к папке exe. Читается из controllers.txt при старте.
+        .manage(app_config::AppConfigState::from_startup())
         // Регистрируем команды, доступные фронтенду через invoke().
         // Каждая команда реализована в своём подмодуле src/commands/:
         //   greet  — тестовая;
@@ -29,6 +35,10 @@ pub fn run() {
         // Точный список — ниже, в generate_handler![].
         .invoke_handler(tauri::generate_handler![
             commands::greet::greet,
+            commands::controllers::ensure_controllers_file,
+            commands::controllers::list_saved_bases,
+            commands::controllers::set_base_dir,
+            commands::controllers::reset_base_dir,
             commands::ini::scan_devices_folder,
             commands::serial::list_serial_ports,
             commands::serial::open_serial_port,

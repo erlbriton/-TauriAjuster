@@ -8,6 +8,7 @@ use serde::Serialize;
 use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
+use crate::app_config::AppConfigState;
 
 /// Описание одного найденного INI-файла для передачи во фронтенд.
 #[derive(Serialize, Clone)]
@@ -70,16 +71,13 @@ fn scan_dir_recursive(dir: &Path, root: &Path, out: &mut Vec<IniFileInfo>) -> Re
     Ok(())
 }
 
-/// Команда: ищет папку Devices рядом с exe/bin и возвращает все .ini
-/// рекурсивно, кроме папок BackUp. Если папки нет — пустой список.
+/// Команда: ищет папку Devices внутри текущей базовой папки и возвращает
+/// все .ini рекурсивно, кроме папок BackUp. Если папки нет — пустой список.
 #[tauri::command]
-pub fn scan_devices_folder() -> Result<Vec<IniFileInfo>, String> {
-    let exe_path = std::env::current_exe()
-        .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {}", e))?;
-    let exe_dir = exe_path
-        .parent()
-        .ok_or_else(|| "У пути к исполняемому файлу нет родительской папки".to_string())?;
-    let devices_dir = exe_dir.join("Devices");
+pub fn scan_devices_folder(state: tauri::State<'_, AppConfigState>) -> Result<Vec<IniFileInfo>, String> {
+    // Путь к Devices берётся из общего состояния (AppConfigState):
+    // по умолчанию это папка exe, но после смены базы — другая.
+    let devices_dir = state.base_dir.join("Devices");
 
     if !devices_dir.is_dir() {
         return Ok(Vec::new());
@@ -91,11 +89,11 @@ pub fn scan_devices_folder() -> Result<Vec<IniFileInfo>, String> {
     Ok(out)
 }
 
-/// Команда: путь к папке Devices рядом с exe/bin. None, если папки нет.
+/// Команда: путь к папке Devices внутри текущей базовой папки.
+/// None, если папки нет.
 #[tauri::command]
-pub fn get_devices_folder_path() -> Option<String> {
-    let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
-    let devices_path = exe_dir.join("Devices");
+pub fn get_devices_folder_path(state: tauri::State<'_, AppConfigState>) -> Option<String> {
+    let devices_path = state.base_dir.join("Devices");
 
     if devices_path.exists() && devices_path.is_dir() {
         Some(devices_path.to_string_lossy().into_owned())
@@ -128,7 +126,10 @@ pub fn read_ini_file(path: String) -> Result<Vec<u8>, String> {
 /// (недопустимые для ОС символы заменены), поэтому здесь только проверка
 /// на пустоту и защита от попыток выхода из папки Devices (..).
 #[tauri::command]
-pub fn ensure_device_subdir(name: String) -> Result<String, String> {
+pub fn ensure_device_subdir(
+    state: tauri::State<'_, AppConfigState>,
+    name: String,
+) -> Result<String, String> {
     eprintln!("[RUST] ensure_device_subdir: имя подпапки = '{}'", name);
 
     // Защита от пустого имени и попыток выйти за пределы Devices (..)
@@ -143,21 +144,16 @@ pub fn ensure_device_subdir(name: String) -> Result<String, String> {
         ));
     }
 
-    // Определяем папку Devices рядом с exe (та же логика, что в scan_devices_folder
-    // и get_devices_folder_path, чтобы не было расхождений).
-    let exe_path = std::env::current_exe()
-        .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {}", e))?;
-    let exe_dir = exe_path
-        .parent()
-        .ok_or_else(|| "У пути к исполняемому файлу нет родительской папки".to_string())?;
-    let devices_dir = exe_dir.join("Devices");
+    // Папка Devices — внутри текущей базовой папки (AppConfigState).
+    // По умолчанию это папка exe, но после смены базы — другая.
+    let devices_dir = state.base_dir.join("Devices");
 
     // Папки Devices нет — это ошибка, создавать её здесь не должны:
     // Devices — корень базы, он появляется либо при первом запуске,
     // либо создаётся пользователем. Молча плодить корень базы нежелательно.
     if !devices_dir.is_dir() {
         return Err(format!(
-            "Папка Devices не найдена рядом с приложением: {}",
+            "Папка Devices не найдена: {}",
             devices_dir.display()
         ));
     }
@@ -194,18 +190,16 @@ pub fn ensure_device_subdir(name: String) -> Result<String, String> {
 ///     Devices/          ← INI-файлы по подпапкам (Location / версия прошивки)
 ///     BackUp/           ← старые INI, перемещённые при обновлении прошивки
 #[tauri::command]
-pub fn ensure_backup_dir(create: bool) -> Result<String, String> {
+pub fn ensure_backup_dir(
+    state: tauri::State<'_, AppConfigState>,
+    create: bool,
+) -> Result<String, String> {
     eprintln!("[RUST] ensure_backup_dir: create = {}", create);
 
-    // Путь к BackUp — рядом с exe, сосед Devices. Та же логика, что в
-    // scan_devices_folder и get_devices_folder_path, чтобы папки гарантированно
-    // лежали на одном уровне.
-    let exe_path = std::env::current_exe()
-        .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {}", e))?;
-    let exe_dir = exe_path
-        .parent()
-        .ok_or_else(|| "У пути к исполняемому файлу нет родительской папки".to_string())?;
-    let backup_dir = exe_dir.join("BackUp");
+    // Путь к BackUp — внутри текущей базовой папки, сосед Devices.
+    // Базовая папка берётся из общего состояния (AppConfigState):
+    // по умолчанию это папка exe, но после смены базы — другая.
+    let backup_dir = state.base_dir.join("BackUp");
 
     if !backup_dir.is_dir() {
         if create {
@@ -251,6 +245,7 @@ pub fn ensure_backup_dir(create: bool) -> Result<String, String> {
 /// Возвращает путь к созданному бэкапу — чтобы TS мог показать его пользователю.
 #[tauri::command]
 pub fn backup_and_replace_ini(
+    state: tauri::State<'_, AppConfigState>,
     old_path: String,
     new_content: Vec<u8>,
     overwrite: bool,
@@ -280,15 +275,11 @@ pub fn backup_and_replace_ini(
         .to_string_lossy()
         .into_owned();
 
-    // 2. Папка BackUp рядом с exe. Если её нет — это ошибка: TS-сторона
-    //    должна была сначала вызвать ensure_backup_dir (создать при согласии
-    //    пользователя) и получить "BACKUP_DIR_NOT_FOUND" при отказе.
-    let exe_path = std::env::current_exe()
-        .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {}", e))?;
-    let exe_dir = exe_path
-        .parent()
-        .ok_or_else(|| "У пути к исполняемому файлу нет родительской папки".to_string())?;
-    let backup_dir = exe_dir.join("BackUp");
+    // 2. Папка BackUp — внутри текущей базовой папки (AppConfigState).
+    //    Если её нет — это ошибка: TS-сторона должна была сначала вызвать
+    //    ensure_backup_dir (создать при согласии пользователя) и получить
+    //    "BACKUP_DIR_NOT_FOUND" при отказе.
+    let backup_dir = state.base_dir.join("BackUp");
 
     if !backup_dir.is_dir() {
         return Err("BACKUP_DIR_NOT_FOUND".to_string());
@@ -333,7 +324,7 @@ pub fn backup_and_replace_ini(
     //    удаляем её. remove_dir сработает только для пустой папки,
     //    поэтому проверка на «не корень» — единственное, что нужно.
     if let Some(parent) = old_file_path.parent() {
-        let devices_dir = exe_dir.join("Devices");
+        let devices_dir = state.base_dir.join("Devices");
         if parent != devices_dir && parent.is_dir() {
             // Проверяем, пуста ли папка: если в ней не осталось записей — удаляем.
             match fs::read_dir(parent) {
@@ -387,15 +378,15 @@ pub fn backup_and_replace_ini(
 ///     BackUp/           ← старые INI, перемещённые при обновлении прошивки
 ///     TemplateDevice/   ← файлы-шаблоны для создания новых устройств
 #[tauri::command]
-pub fn ensure_template_dir(create: bool) -> Result<String, String> {
+pub fn ensure_template_dir(
+    state: tauri::State<'_, AppConfigState>,
+    create: bool,
+) -> Result<String, String> {
     eprintln!("[RUST] ensure_template_dir: create = {}", create);
 
-    let exe_path = std::env::current_exe()
-        .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {}", e))?;
-    let exe_dir = exe_path
-        .parent()
-        .ok_or_else(|| "У пути к исполняемому файлу нет родительской папки".to_string())?;
-    let template_dir = exe_dir.join("TemplateDevice");
+    // Папка TemplateDevice — внутри текущей базовой папки (AppConfigState).
+    // По умолчанию это папка exe, но после смены базы — другая.
+    let template_dir = state.base_dir.join("TemplateDevice");
 
     if !template_dir.is_dir() {
         if create {
@@ -432,15 +423,12 @@ pub fn ensure_template_dir(create: bool) -> Result<String, String> {
 /// Подпапки пропускаются: шаблоны — это файлы. Алфавитная сортировка
 /// даёт стабильный порядок между запусками.
 #[tauri::command]
-pub fn scan_template_dir() -> Result<Vec<String>, String> {
+pub fn scan_template_dir(state: tauri::State<'_, AppConfigState>) -> Result<Vec<String>, String> {
     eprintln!("[RUST] scan_template_dir: вызов команды");
 
-    let exe_path = std::env::current_exe()
-        .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {}", e))?;
-    let exe_dir = exe_path
-        .parent()
-        .ok_or_else(|| "У пути к исполняемому файлу нет родительской папки".to_string())?;
-    let template_dir = exe_dir.join("TemplateDevice");
+    // Папка TemplateDevice — внутри текущей базовой папки (AppConfigState).
+    // По умолчанию это папка exe, но после смены базы — другая.
+    let template_dir = state.base_dir.join("TemplateDevice");
 
     // Папки нет — возвращаем пустой список, это не ошибка.
     if !template_dir.is_dir() {
@@ -461,10 +449,10 @@ pub fn scan_template_dir() -> Result<Vec<String>, String> {
         }
     }
 
-        // Стабильный порядок — алфавитный.
+    // Стабильный порядок — алфавитный.
     names.sort();
 
-       eprintln!(
+    eprintln!(
         "[RUST] scan_template_dir: найдено {} шаблон(ов)",
         names.len()
     );
@@ -480,15 +468,12 @@ pub fn scan_template_dir() -> Result<Vec<String>, String> {
 /// Если папки BackUp нет — возвращает пустой массив, без ошибки.
 /// Это нормально: пользователь мог её ещё не создавать или удалить вручную.
 #[tauri::command]
-pub fn scan_backup_dir() -> Result<Vec<String>, String> {
+pub fn scan_backup_dir(state: tauri::State<'_, AppConfigState>) -> Result<Vec<String>, String> {
     eprintln!("[RUST] scan_backup_dir: вызов команды");
 
-    let exe_path = std::env::current_exe()
-        .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {}", e))?;
-    let exe_dir = exe_path
-        .parent()
-        .ok_or_else(|| "У пути к исполняемому файлу нет родительской папки".to_string())?;
-    let backup_dir = exe_dir.join("BackUp");
+    // Папка BackUp — внутри текущей базовой папки (AppConfigState).
+    // По умолчанию это папка exe, но после смены базы — другая.
+    let backup_dir = state.base_dir.join("BackUp");
 
     // Папки нет — возвращаем пустой список, это не ошибка.
     if !backup_dir.is_dir() {
@@ -531,7 +516,11 @@ pub fn scan_backup_dir() -> Result<Vec<String>, String> {
 ///
 /// Возвращает имя файла — чтобы TS-сторона сразу могла добавить его в список.
 #[tauri::command]
-pub fn copy_template_file(src_path: String, overwrite: bool) -> Result<String, String> {
+pub fn copy_template_file(
+    state: tauri::State<'_, AppConfigState>,
+    src_path: String,
+    overwrite: bool,
+) -> Result<String, String> {
     eprintln!(
         "[RUST] copy_template_file: src = '{}', overwrite = {}",
         src_path,
@@ -555,15 +544,11 @@ pub fn copy_template_file(src_path: String, overwrite: bool) -> Result<String, S
         .to_string_lossy()
         .into_owned();
 
-    // Папка TemplateDevice рядом с exe. К моменту вызова команды она
-    // уже должна существовать — TS-сторона вызывает ensure_template_dir
-    // с create = true, если папки не было и пользователь согласился.
-    let exe_path = std::env::current_exe()
-        .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {}", e))?;
-    let exe_dir = exe_path
-        .parent()
-        .ok_or_else(|| "У пути к исполняемому файлу нет родительской папки".to_string())?;
-    let template_dir = exe_dir.join("TemplateDevice");
+    // Папка TemplateDevice — внутри текущей базовой папки (AppConfigState).
+    // К моменту вызова команды она уже должна существовать — TS-сторона
+    // вызывает ensure_template_dir с create = true, если папки не было
+    // и пользователь согласился.
+    let template_dir = state.base_dir.join("TemplateDevice");
 
     if !template_dir.is_dir() {
         return Err("TEMPLATE_DIR_NOT_FOUND".to_string());
@@ -618,15 +603,13 @@ pub fn copy_template_file(src_path: String, overwrite: bool) -> Result<String, S
 /// BackUp и TemplateDevice. Создаётся молча, без диалогов: это папка
 /// результатов работы приложения, её отсутствие — нормальная ситуация.
 #[tauri::command]
-pub fn ensure_xlt_dir() -> Result<String, String> {
+pub fn ensure_xlt_dir(state: tauri::State<'_, AppConfigState>) -> Result<String, String> {
     eprintln!("[RUST] ensure_xlt_dir: вызов команды");
 
-    let exe_path = std::env::current_exe()
-        .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {}", e))?;
-    let exe_dir = exe_path
-        .parent()
-        .ok_or_else(|| "У пути к исполняемому файлу нет родительской папки".to_string())?;
-    let xlt_dir = exe_dir.join("XLT");
+    // Путь к базовой папке берём из общего состояния (AppConfigState).
+    // По умолчанию это папка exe, но после смены базы через
+    // «Обновить список устройств» → «Сменить папку базы» — другая.
+    let xlt_dir = state.base_dir.join("XLT");
 
     if !xlt_dir.is_dir() {
         fs::create_dir_all(&xlt_dir).map_err(|e| {
