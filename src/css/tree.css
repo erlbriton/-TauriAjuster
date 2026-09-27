@@ -222,3 +222,40 @@
 .tree-id-item.is-backup {
     color: #c00 !important;
 }
+/* ── Модальное окно "Сменить папку базы" ── */
+#baseDirOverlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+#baseDirOverlay.hidden { display: none; }
+
+.base-dir-modal {
+  width: 520px; max-width: 95vw; max-height: 90vh; overflow: auto;
+  background: #f0f0f0; color: #222;
+  border: 1px solid #777; box-shadow: 0 10px 35px rgba(0,0,0,.45);
+  font-family: system-ui, "Segoe UI", sans-serif; font-size: 13px;
+}
+.base-dir-header {
+  display: flex; justify-content: space-between; align-items: center;
+  background: #3e5f5f; color: #fff; padding: 6px 10px; font-weight: 600;
+}
+.base-dir-close { background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; }
+.base-dir-body { padding: 12px 14px; }
+.base-dir-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.base-dir-row label { width: 130px; flex: 0 0 130px; color: #333; }
+.base-dir-row select {
+  flex: 1; padding: 3px 6px; border: 1px solid #999; background: #fff; font-size: 13px;
+}
+.base-dir-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px 14px; border-top: 1px solid #ccc; gap: 10px;
+}
+.base-dir-footer-right { display: flex; gap: 10px; }
+.base-dir-footer button {
+  padding: 6px 14px; border: 1px solid #888; background: #e4e4e4; cursor: pointer; font-size: 13px;
+}
+.base-dir-footer button:hover { background: #d5d5d5; }
+.base-dir-btn-primary { background: #3f8fd8; color: #fff; border-color: #2c6fae; }
+.base-dir-btn-primary:hover { background: #2c6fae; }

@@ -11,6 +11,10 @@ import './ui/layout.js';
 
 import { showIdModal } from './ui/ui.js';
 import { initFwUpdateModal } from './ui/fw-update-modal.js';
+import { initBaseDirUI } from './ui/base-dir-ui.js';
+import { saveIniChanges } from './ini-manager/save-ini.js';
+import { hasAnyDirty } from './ini-manager/dirty-tracker.js';
+import { showConfirmDialog } from './ui/confirm-dialog.js';
 import { updateDeviceRegisters } from './serial/device_updater.js';
 //import { setupFileHandling, openIniFile } from './ini-manager/file-loader.js';
 //import { setupFileHandling } from './ini-manager/file-loader.js';
@@ -103,6 +107,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         initDropZone(appState);
 
         initFwUpdateModal();
+
+        // Окно «Сменить папку базы»: пункт в меню «Обновить список устройств».
+        // Зависимости передаются извне — чтобы модуль не тянул циклические импорты.
+        initBaseDirUI({
+            appState,
+            hasDirty: hasAnyDirty,
+            saveIni: saveIniChanges,
+            confirm: showConfirmDialog,
+        });
 
         // Tauri: автозагрузка INI-файлов из папки Devices, которая лежит
         // рядом с исполняемым файлом (exe/bin). Запускается после

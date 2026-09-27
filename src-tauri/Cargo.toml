@@ -24,6 +24,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-dialog = "2.7.3"
 tauri-plugin-fs = "2.5.2"
+# Плагин для перезапуска приложения (relaunch) после смены базы.
+tauri-plugin-process = "2"
 # Библиотека для работы с последовательными портами (кроссплатформенная)
 serialport = "4.3"
 

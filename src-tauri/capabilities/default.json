@@ -9,6 +9,7 @@
     "dialog:default",
     "dialog:allow-ask",
     "fs:default",
-    "fs:allow-write-file"
+    "fs:allow-write-file",
+    "process:allow-restart"
   ]
 }

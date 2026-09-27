@@ -24,6 +24,7 @@
               <div class="split-dropdown-item" id="menuDeviceMechType">Тип механизма</div>
               <div class="split-dropdown-item" id="menuDeviceServiceDate">Дата последнего обслуживания</div>
               <div class="split-dropdown-item" id="menuDeviceType">Тип устройства</div>
+              <div class="split-dropdown-item" id="menuChangeBase">Сменить папку</div>
             </div>
           </div>
           <button class="tool-btn" id="modbusScanBtn" title="Поиск устройств в сети Modbus">🔍</button>
@@ -480,6 +481,31 @@
     </div>
   </div>
 </div>
+    <!-- Модальное окно "Сменить папку базы" -->
+    <div id="baseDirOverlay" class="hidden">
+      <div class="base-dir-modal">
+        <div class="base-dir-header">
+          <span>Сменить папку базы</span>
+          <button id="baseDirCloseBtn" class="base-dir-close" title="Закрыть">×</button>
+        </div>
+
+        <div class="base-dir-body">
+          <div class="base-dir-row">
+            <label for="baseDirSelect">Базовая папка:</label>
+            <select id="baseDirSelect"></select>
+          </div>
+        </div>
+
+        <div class="base-dir-footer">
+          <button id="baseDirAddBtn" type="button">Добавить…</button>
+          <div class="base-dir-footer-right">
+            <button id="baseDirApplyBtn" type="button" class="base-dir-btn-primary">Применить</button>
+            <button id="baseDirCancelBtn" type="button">Отмена</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="src/main.ts"></script>
   </body>
 </html>

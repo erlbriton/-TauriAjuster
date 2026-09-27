@@ -43,7 +43,8 @@
                 { "path": "**" }
               ]
             },
-            "fs:default"
+            "fs:default",
+            "process:default"
           ]
         }
       ]

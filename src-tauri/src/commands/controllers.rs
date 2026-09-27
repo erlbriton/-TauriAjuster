@@ -296,3 +296,20 @@ pub fn reset_base_dir(state: tauri::State<'_, AppConfigState>) -> Result<(), Str
 
     Ok(())
 }
+/// Команда: проверить, существует ли файл controllers.txt рядом с exe.
+///
+/// Отличие от ensure_controllers_file: этот вариант НИЧЕГО не создаёт.
+/// Используется окном «Сменить папку базы», чтобы сначала спросить
+/// пользователя: «Файл не найден. Создать?» — и только по согласию
+/// вызвать ensure_controllers_file.
+#[tauri::command]
+pub fn controllers_file_exists(state: tauri::State<'_, AppConfigState>) -> bool {
+    let file_path = state.controllers_file();
+    let exists = file_path.exists();
+    eprintln!(
+        "[RUST] controllers_file_exists: путь = '{}', существует = {}",
+        file_path.display(),
+        exists
+    );
+    exists
+}

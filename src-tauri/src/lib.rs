@@ -19,6 +19,9 @@ pub fn run() {
         // Регистрируем плагин для работы с файловой системой (чтение/запись файлов).
         // Позволяет обойти ограничения браузера и работать с файлами напрямую.
         .plugin(tauri_plugin_fs::init())
+        // Регистрируем плагин для перезапуска приложения.
+        // Используется после смены базовой папки (relaunch).
+        .plugin(tauri_plugin_process::init())
         // Регистрируем общее состояние serial-порта:
         // теперь все команды видят один и тот же открытый порт
         .manage(state::SerialState::default())
@@ -35,6 +38,7 @@ pub fn run() {
         // Точный список — ниже, в generate_handler![].
         .invoke_handler(tauri::generate_handler![
             commands::greet::greet,
+            commands::controllers::controllers_file_exists,
             commands::controllers::ensure_controllers_file,
             commands::controllers::list_saved_bases,
             commands::controllers::set_base_dir,
