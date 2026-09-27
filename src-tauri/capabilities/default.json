@@ -9,7 +9,18 @@
     "dialog:default",
     "dialog:allow-ask",
     "fs:default",
-    "fs:allow-write-file",
-    "process:allow-restart"
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [
+        { "path": "**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [
+        { "path": "**" }
+      ]
+    },
+    "process:default"
   ]
 }

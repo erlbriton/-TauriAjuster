@@ -257,5 +257,3 @@
   padding: 6px 14px; border: 1px solid #888; background: #e4e4e4; cursor: pointer; font-size: 13px;
 }
 .base-dir-footer button:hover { background: #d5d5d5; }
-.base-dir-btn-primary { background: #3f8fd8; color: #fff; border-color: #2c6fae; }
-.base-dir-btn-primary:hover { background: #2c6fae; }
