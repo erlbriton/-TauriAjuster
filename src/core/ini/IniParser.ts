@@ -21,7 +21,9 @@ const TYPES_32BIT: ReadonlySet<IniDataType> = new Set([
 ]);
 
 /** Секции, содержащие параметры с parts[] */
-const PARAM_SECTIONS: ReadonlySet<string> = new Set(['RAM', 'CD', 'FLASH']);
+// Секции INI, содержащие параметры (строки формата "key=value/.../.../").
+// XRAM — исторически отдельная секция для диагностики; формат идентичен RAM.
+const PARAM_SECTIONS: ReadonlySet<string> = new Set(['RAM', 'XRAM', 'CD', 'FLASH']);
 
 /** Маппинг сырых строк типа → нормализованный enum */
 const DATA_TYPE_MAP: Record<string, IniDataType> = {

@@ -60,6 +60,15 @@ export async function readLoop(serial: ISerialPort, _parser: unknown, view: IOsc
                 console.log("[readLoop] Остановка цикла: isPolling стал false");
                 break;
             }
+
+            // Текущий режим отображения (RAM/XRAM) читаем из осциллографа
+            // на каждой итерации: пользователь может переключить его
+            // через «Свойства просмотра параметров» без перезапуска цикла.
+            // Опрос должен идти по регистрам той секции, из которой
+            // построены текущие каналы, иначе графики XRAM будут пустыми.
+            const sectionMode: 'RAM' | 'XRAM' =
+                (window as unknown as { osc?: { currentSectionMode?: 'RAM' | 'XRAM' } })
+                    .osc?.currentSectionMode ?? 'RAM';
             
             const iniConfig: IniConfig | null = stateObj.currentIniConfig;
             if (!iniConfig || !iniConfig.isValid) {
@@ -67,7 +76,8 @@ export async function readLoop(serial: ISerialPort, _parser: unknown, view: IOsc
                 continue;
             }
             // 1. Формируем оптимальные батчи запросов Modbus
-            const batches = getOptimizedBatches(iniConfig, 'RAM', 10, 125);
+            //    по регистрам текущей секции (RAM или XRAM).
+            const batches = getOptimizedBatches(iniConfig, sectionMode, 10, 125);
             if (batches.length === 0) {
                 await new Promise(r => setTimeout(r, 500));
                 continue;
@@ -131,7 +141,7 @@ export async function readLoop(serial: ISerialPort, _parser: unknown, view: IOsc
 
             if (mergedDataMap.size > 0) {
                 // --- 3. СИНХРОНИЗАЦИЯ С ОСЦИЛЛОГРАФОМ (через типизированные IniParameter) ---
-                const ramParams: IniParameter[] = iniConfig.getSection('RAM');
+                const ramParams: IniParameter[] = iniConfig.getSection(sectionMode);
                 const oscData: Record<string, number> = {};
                                 for (const param of ramParams) {
                     if (param.registerAddress === null) continue;

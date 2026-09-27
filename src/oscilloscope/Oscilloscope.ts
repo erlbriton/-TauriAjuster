@@ -61,6 +61,8 @@ import {
   applyChannelConfigs as channelsApplyConfigs,
   loadIniContent as channelsLoadIniContent,
   setActiveIni as channelsSetActiveIni,
+  setSectionMode as channelsSetSectionMode,
+  getSectionChannels as channelsGetSectionChannels,
 } from "./scope/OscilloscopeChannels";
 import {
   setConnectionStatus as lifecycleSetConnectionStatus,
@@ -115,6 +117,13 @@ export class Oscilloscope {
   private externalSerial: { write(data: Uint8Array): Promise<void> } | null = null;
   private onPollingStateChangeCallback?: (isPolling: boolean) => void;
   public currentIniConfig: IniConfig | null = null;
+  /**
+   * Текущий режим отображения параметров: какая секция INI используется
+   * для каналов осциллографа. Переключается кнопками RAM/XRAM в окне
+   * «Свойства просмотра параметров». Значение читают loadIniContent
+   * (при загрузке файла) и file-loader (при применении INI из контекста).
+   */
+  public currentSectionMode: 'RAM' | 'XRAM' = 'RAM';
   private appState: AppState | null = null;
   public pixiApp: Application | null = null;
   private graphColumnOffset: number = 0;
@@ -257,39 +266,47 @@ public setAppState(state: AppState): void {
       setAnimFrameId: (v) => { this.animFrameId = v; },
     };
   }
-
   public setIniFiles(files: IniFileItem[]): void {
     channelsSetIniFiles(this, files);
   }
-
   public setActiveIni(id: string, loadContent: boolean = true): void {
     channelsSetActiveIni(this, id, loadContent);
   }
-
   public setSlaveAddress(addr: number): void {
     this.slaveAddress = addr;
   }
-
   public setConnectionStatus(connected: boolean, message?: string): void {
     lifecycleSetConnectionStatus(this, connected, message);
   }
-
   public destroy(): void {
     lifecycleDestroy(this);
   }
-
   public async loadIniContent(iniContent: string): Promise<void> {
     return channelsLoadIniContent(this, iniContent);
+  }
+  /**
+   * Устанавливает активный режим отображения параметров (RAM/XRAM).
+   * Вся логика (сравнение, сброс кэша загруженного содержимого,
+   * повторная загрузка каналов из новой секции) — в OscilloscopeChannels.
+   */
+  public async setSectionMode(mode: 'RAM' | 'XRAM'): Promise<void> {
+    return channelsSetSectionMode(this, mode);
+  }
+  /**
+   * Возвращает каналы указанной секции (RAM/XRAM) без изменения состояния
+   * осциллографа. Используется окном «Свойства просмотра параметров» для
+   * предварительного показа списка параметров до нажатия «Применить».
+   */
+  public getSectionChannels(mode: 'RAM' | 'XRAM'): Channel[] {
+    return channelsGetSectionChannels(this, mode);
   }
 
   public async applyChannelConfigs(configs: ChannelConfig[]): Promise<void> {
     return channelsApplyConfigs(this, configs);
   }
-
   public async setChannels(newChannels: Channel[]): Promise<void> {
     return channelsSetChannels(this, newChannels);
   }
-
   /** Публичный доступ к внутреннему архиву (для просмотрщика .rec) */
   public getArchive(): Archive {
     return this.archive;
@@ -302,23 +319,19 @@ public setAppState(state: AppState): void {
   public addViewerButton(label: string, title: string, onClick: () => void): void {
     this.toolbar.appendCustomButton(label, title, onClick);
   }
-
   /** Финальная настройка тулбара для просмотрщика */
   public finalizeViewerToolbar(): void {
     this.toolbar.finalizeViewerLayout();
   }
-
   /** Фиксирует время просмотра (выключает "живой" режим, маркеры застывают) */
   public setViewTime(t: number): void {
     this.settings.setViewTime(t);
   }
-
   public async updateVisibleChannels(
     newVisibleChannels: Channel[],
   ): Promise<void> {
     return channelsUpdateVisible(this, newVisibleChannels);
   }
-
   private getCommandContext(): CommandContext {
     return {
       selectedChannel: this.selectedChannel,

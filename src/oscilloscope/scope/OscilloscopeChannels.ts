@@ -93,13 +93,36 @@ export async function loadIniContent(osc: Oscilloscope, iniContent: string): Pro
     const coreParser = new CoreIniParser();
     const parseResult = coreParser.parse(iniContent);
     const iniConfig = new IniConfig(parseResult);
-    const ramParams = iniConfig.getSection("RAM");
-    const channelConfigs = iniParamsToChannelConfigs(ramParams);
+    // Секция берётся из текущего режима (RAM/XRAM), переключаемого
+    // кнопками в окне «Свойства просмотра параметров».
+    const sectionParams = iniConfig.getSection(osc.currentSectionMode);
+    const channelConfigs = iniParamsToChannelConfigs(sectionParams);
     await osc.applyChannelConfigs(channelConfigs);
     osc.currentIniConfig = iniConfig;
     osc.lastLoadedIniContent = iniContent;
   } catch (err) {
     console.error("[Oscilloscope] Failed to parse INI content:", err);
+  }
+}
+/**
+ * Устанавливает активный режим отображения (RAM/XRAM) и, если INI уже
+ * загружен, пересобирает каналы из соответствующей секции.
+ *
+ * Источник данных — osc.currentIniConfig (распарсенный INI-конфиг).
+ * Он заполняется двумя путями:
+ *  - loadIniContent (когда осциллограф получает текст INI),
+ *  - file-loader.ts (когда INI применяется из дерева устройств напрямую).
+ * Если ни один не сработал — переключается только флаг, каналы останутся
+ * прежними до следующей загрузки INI.
+ */
+export async function setSectionMode(osc: Oscilloscope, mode: 'RAM' | 'XRAM'): Promise<void> {
+  if (osc.isDestroyed) return;
+  if (osc.currentSectionMode === mode) return;
+  osc.currentSectionMode = mode;
+  if (osc.currentIniConfig) {
+    const sectionParams = osc.currentIniConfig.getSection(mode);
+    const channelConfigs = iniParamsToChannelConfigs(sectionParams);
+    await osc.applyChannelConfigs(channelConfigs);
   }
 }
 export function setActiveIni(osc: Oscilloscope, id: string, loadContent: boolean = true): void {
@@ -121,4 +144,25 @@ export function setActiveIni(osc: Oscilloscope, id: string, loadContent: boolean
       void osc.loadIniContent(file.content);
     }
   }
+}
+/**
+ * Возвращает каналы указанной секции (RAM/XRAM) из уже распарсенного
+ * конфига осциллографа, НЕ трогая сам осциллограф.
+ *
+ * Используется окном «Свойства просмотра параметров»: когда пользователь
+ * кликает RAM/XRAM, окно перезаполняет свои списки, но фактическое
+ * переключение осциллографа происходит только по кнопке «Применить».
+ *
+ * Если конфиг ещё не загружен (нет активного устройства) — возвращает
+ * пустой массив.
+ */
+export function getSectionChannels(osc: Oscilloscope, mode: 'RAM' | 'XRAM'): Channel[] {
+  if (osc.isDestroyed) return [];
+  const iniConfig = osc.currentIniConfig;
+  if (!iniConfig) return [];
+  const params = iniConfig.getSection(mode);
+  const configs = iniParamsToChannelConfigs(params);
+  return configs
+    .filter((c) => c && c.id)
+    .map((c) => new Channel(c));
 }

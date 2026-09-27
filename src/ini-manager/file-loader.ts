@@ -114,13 +114,18 @@ export async function processSingleFileContent(
     }
     renderModbusTable(iniConfig);
 
-    // Осциллограф: используем уже распарсенный iniConfig
+    // Осциллограф: используем уже распарсенный iniConfig.
+    // Секция берётся из текущего режима (RAM/XRAM), переключаемого
+    // кнопками в окне «Свойства просмотра параметров».
     const osc = window.osc;
     if (osc && typeof osc.applyChannelConfigs === 'function') {
       try {
-        const ramParams = iniConfig.getSection('RAM');
-        const channelConfigs = iniParamsToChannelConfigs(ramParams);
+        const sectionParams = iniConfig.getSection(osc.currentSectionMode);
+        const channelConfigs = iniParamsToChannelConfigs(sectionParams);
         await osc.applyChannelConfigs(channelConfigs);
+        // Сохраняем распарсенный конфиг в осциллографе: по нему
+        // setSectionMode будет пересобирать каналы при переключении RAM/XRAM.
+        osc.currentIniConfig = iniConfig;
       } catch (oscErr: unknown) {
         const msg = oscErr instanceof Error ? oscErr.message : String(oscErr);
         console.error('[file-loader] applyChannelConfigs error:', oscErr);
