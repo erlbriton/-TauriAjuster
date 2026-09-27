@@ -274,12 +274,10 @@ export function showToast(text: string): void {
     if (existing) existing.remove();
 
     const overlay = document.createElement('div');
-    overlay.className = 'app-toast-overlay';
-    // Стили overlay берём от .id-modal-overlay через инлайн —
-    // подстраховка на случай, если в CSS класс .app-toast-overlay не описан.
-    overlay.style.position = 'fixed';
-    overlay.style.inset = '0';
-    overlay.style.zIndex = '10001';
+    // Два класса: .id-modal-overlay даёт раскладку (fixed, flex, центр),
+    // .app-toast-overlay — уникальный селектор для поиска/удаления тоста
+    // (чтобы не конфликтовать с showIdModal, если он откроется одновременно).
+    overlay.className = 'id-modal-overlay app-toast-overlay';
 
     const modal = document.createElement('div');
     modal.className = 'id-modal';  // переиспользуем стиль модалки из showIdModal

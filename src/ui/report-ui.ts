@@ -161,21 +161,19 @@ async function createReport(): Promise<void> {
 
         const blob = await buildReportBlob(data);
 
-        setProgress(90);
-        setStatus('Построение предпросмотра...');
-
-        lastGeneratedBlob = blob;
-        lastGeneratedData = data;
-        renderPreview(data);
-
         setProgress(100);
         setStatus('Готово.');
 
-        // Закрываем окно создания и показываем предпросмотр
+        lastGeneratedBlob = blob;
+        lastGeneratedData = data;
+
+        // Закрываем окно создания и сразу сохраняем файл на диск.
+        // Промежуточное окно предпросмотра убрано: пользователь получает
+        // только короткое уведомление об успешной записи (showToast).
         setTimeout(() => {
             hideOverlay('reportCreateOverlay');
-            showOverlay('reportPreviewOverlay');
             resetProgress();
+            void saveReport();
         }, 250);
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
