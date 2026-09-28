@@ -10,7 +10,6 @@ import type { IOscilloscopeApi } from '../core/osc-api.js';
 import type { ModbusParser } from '../serial/modbus.js';
 import { IniParser as CoreIniParser, IniConfig } from '../core/ini/index.js';
 import { updateIdBanner, showCompactError } from './ui.js';
-import { isLinux } from '../core/platform.js'; 
 import { initModbusScanUI } from './modbus-scan-ui.js';
 import { initReportUI } from './report-ui.js';
 import { initCmdlineUI } from './cmdline-ui.js';
@@ -382,19 +381,10 @@ export function initUI(deps: UiManagerDeps): void {
     });
   }
 
-  // Windows: открытие папки недоступно — физически скрываем стрелочку,
-  // разделитель и пункт "Открыть папку". Кнопка становится обычной
-  // одиночной "Открыть файл". В Linux всё остаётся как есть.
-  if (!isLinux()) {
-    if (menuOpenFolder) menuOpenFolder.style.display = 'none';
-    if (folderArrowBtn) {
-      folderArrowBtn.style.display = 'none';
-      const divider = folderArrowBtn.previousElementSibling as HTMLElement | null;
-      if (divider && divider.classList.contains('split-btn-divider')) {
-        divider.style.display = 'none';
-      }
-    }
-  }
+    // Стрелочка и выпадающее меню с двумя пунктами ("Открыть файл",
+  // "Открыть папку") показываются на всех платформах. В нативной версии
+  // Windows открытие папки тоже реализовано (через Rust-команду
+  // open_file_location), поэтому скрывать пункт больше не нужно.
   if (folderArrowBtn) folderArrowBtn.addEventListener('click', (e) => { e.stopPropagation(); folderDropdown?.classList.toggle('show'); });
     document.addEventListener('click', () => {
     folderDropdown?.classList.remove('show');
