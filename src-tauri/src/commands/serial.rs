@@ -89,9 +89,13 @@ pub fn serial_transaction(
     let mut guard = state.port.lock().map_err(|e| e.to_string())?;
     let port = guard.as_mut().ok_or_else(|| "Порт не открыт".to_string())?;
 
-    // 1. Пишем пакет.
-    port.write_all(&data)
-        .map_err(|e| format!("Ошибка записи в порт: {}", e))?;
+    // 1. Пишем пакет. При фатальной ошибке (обрыв USB, ERROR_BAD_COMMAND и т.п.)
+    //    сбрасываем handle в state, чтобы следующее открытие создало свежий.
+    if let Err(e) = port.write_all(&data) {
+        eprintln!("[RUST] serial_transaction: фатальная ошибка write: {}", e);
+        *guard = None;
+        return Err(format!("Ошибка записи в порт: {}", e));
+    }
 
     // 2. Читаем ответ до timeout_ms или до 3 мс тишины после первого байта.
     let mut result: Vec<u8> = Vec::new();
@@ -111,7 +115,6 @@ pub fn serial_transaction(
                 // 0 байт — просто продолжаем
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                // Тишина. Если уже что-то приняли и пауза >= 3 мс — выходим.
                 if let Some(t) = last_byte_at {
                     if t.elapsed() >= silence_timeout {
                         break;
@@ -119,6 +122,8 @@ pub fn serial_transaction(
                 }
             }
             Err(e) => {
+                eprintln!("[RUST] serial_transaction: фатальная ошибка read: {}", e);
+                *guard = None;
                 return Err(format!("Ошибка чтения из порта: {}", e));
             }
         }

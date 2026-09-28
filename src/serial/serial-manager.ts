@@ -5,16 +5,11 @@
 // serialManager.executeTransaction. Реализация — через Rust-команду
 // serial_transaction: одна команда делает write+read на одном handle порта
 // и возвращает все принятые байты.
-//
-// Архитектура "фоновый читатель + emit/listen" осталась в прошлом:
-// на Windows она давала 80 мс задержки на write из-за сериализации
-// read/write драйвером COM-порта. Транзакционная модель убирает эту проблему.
 
 import type { ISerialPort } from './ISerialPort.js';
 
 /** Функция проверки: получен ли полный ответ на транзакцию.
- *  Оставлена в сигнатуре для совместимости; в новой архитектуре не используется —
- *  Rust возвращает всё, что успел прочитать за timeout_ms. */
+ *  Оставлена в сигнатуре для совместимости; в новой архитектуре не используется. */
 export type CheckCompleteFn = (buffer: Uint8Array) => boolean;
 
 // Глобальный объект Tauri API.
@@ -34,8 +29,7 @@ export class SerialManager {
         this.serial = serial;
     }
 
-    /** Заглушка для совместимости: раньше запускала фоновый читающий цикл.
-     *  Сейчас чтение делает Rust по запросу, отдельного цикла нет. */
+    /** Заглушка для совместимости. */
     public startReader(): void {
         // no-op
     }
@@ -50,8 +44,10 @@ export class SerialManager {
         this.lock = new Promise((r) => { release = r; });
         await oldLock;
 
+        // port объявляем ЗА пределами try, чтобы catch тоже его видел.
+        const port = this.serial;
+
         try {
-            const port = this.serial;
             if (!port) {
                 throw new Error("[SerialManager] Порт не инициализирован для транзакции.");
             }
@@ -66,6 +62,25 @@ export class SerialManager {
             return new Uint8Array(response);
         } catch (err) {
             console.error("[SerialManager] Ошибка транзакции:", err);
+
+            // Фатальная ошибка транспорта — уведомляем порт.
+            const msg = err instanceof Error ? err.message : String(err);
+            const isFatal =
+                msg.includes('фатальная ошибка') ||
+                msg.includes('os error 22') ||
+                msg.includes('Устройство не опознает команду') ||
+                msg.includes('Порт не открыт');
+
+            if (isFatal && port) {
+                // Приведение через unknown: у ISerialPort нет notifyDisconnect
+                // (это метод только TauriSerialPort), но мы вызываем его
+                // опционально — если он есть у конкретной реализации.
+                const maybe = port as unknown as { notifyDisconnect?: () => void };
+                if (typeof maybe.notifyDisconnect === 'function') {
+                    maybe.notifyDisconnect();
+                }
+            }
+
             throw err;
         } finally {
             release();
