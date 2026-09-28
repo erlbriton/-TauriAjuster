@@ -46,6 +46,7 @@ pub fn run() {
             commands::ini::scan_devices_folder,
             commands::serial::list_serial_ports,
             commands::serial::open_serial_port,
+            commands::serial::serial_transaction,
             commands::serial::write_serial_port,
             commands::serial::close_serial_port,
             commands::fs::open_in_default_editor,

@@ -44,6 +44,14 @@ export default defineConfig({
   server: {
     port: 1420, // Порт, который ожидает Tauri
     hmr: process.env.DISABLE_HMR !== 'true',
-    watch: process.env.DISABLE_HMR === 'true' ? null : {},
+    // Папку src-tauri исключаем из наблюдения Vite: там Rust компилирует
+    // свои бинарники, и на Windows Vite не может их «залочить» для watch
+    // (ошибка EBUSY). На Linux этой проблемы нет, но исключение безопасно
+    // и там.
+    watch: process.env.DISABLE_HMR === 'true'
+      ? null
+      : {
+          ignored: ['**/src-tauri/**'],
+        },
   },
 });

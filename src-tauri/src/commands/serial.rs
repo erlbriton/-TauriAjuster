@@ -1,23 +1,20 @@
 // src-tauri/src/commands/serial.rs
 // Команды работы с последовательным портом:
 // - list_serial_ports: список доступных COM/ttyUSB/ttyACM;
-// - open_serial_port: открыть порт и запустить фоновый поток чтения;
-// - write_serial_port: записать байты в открытый порт;
-// - close_serial_port: остановить поток и закрыть порт.
+// - open_serial_port: открыть порт (без фонового чтения);
+// - serial_transaction: атомарный write+read на одном handle;
+// - write_serial_port: (старая команда, оставлена для совместимости);
+// - close_serial_port: закрыть порт.
 
 use std::io::{Read, Write};
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serialport::available_ports;
-use tauri::Emitter;
 
 use crate::state::SerialState;
 
 /// Команда: возвращает список доступных последовательных портов (COM-портов).
-/// Использует библиотеку serialport для нативного сканирования системы.
-/// Фильтрует виртуальные порты (ttyS*) и оставляет только реальные USB/COM порты.
 #[tauri::command]
 pub fn list_serial_ports() -> Result<Vec<String>, String> {
     eprintln!("[RUST] list_serial_ports: вызов команды");
@@ -41,98 +38,121 @@ pub fn list_serial_ports() -> Result<Vec<String>, String> {
     Ok(port_names)
 }
 
-/// Команда: открыть последовательный порт и запустить фоновый поток чтения.
-/// Поток чтения сам толкает принятые байты во фронтенд событием "serial-data"
-/// (push-модель): фронтенд ничего не опрашивает, данные приходят сами.
+/// Команда: открыть последовательный порт.
+///
+/// Фонового читающего потока больше НЕТ. Чтение выполняется по запросу
+/// через serial_transaction — на том же handle, что и запись. Это устраняет
+/// конфликт read/write на Windows, где драйвер COM-порта сериализует
+/// обращения к одному устройству.
 #[tauri::command]
 pub fn open_serial_port(
-    app: tauri::AppHandle,
     state: tauri::State<'_, SerialState>,
     path: String,
     baud_rate: u32,
 ) -> Result<(), String> {
-    // 1. Останавливаем ПРЕДЫДУЩИЙ читающий поток (если был).
-    {
-        let mut stop_guard = state.reader_stop.lock().map_err(|e| e.to_string())?;
-        if let Some(old_stop) = stop_guard.take() {
-            old_stop.store(true, Ordering::Relaxed);
-        }
-    }
+    eprintln!("[RUST] open_serial_port: path = '{}', baud = {}", path, baud_rate);
 
-    // 2. Закрываем старый порт, если был открыт.
+    // Закрываем старый порт, если был открыт.
     {
         let mut guard = state.port.lock().map_err(|e| e.to_string())?;
         *guard = None;
     }
 
-    // 3. Открываем порт с таймаутом чтения 100 мс.
+    // Открываем порт с коротким таймаутом чтения 1 мс.
+    // Таймаут нужен, чтобы read() не блокировался навсегда и возвращал
+    // управление в serial_transaction для проверки общего таймаута.
     let port = serialport::new(&path, baud_rate)
-        .timeout(Duration::from_millis(100))
+        .timeout(Duration::from_millis(1))
         .open()
         .map_err(|e| format!("Не удалось открыть порт {}: {}", path, e))?;
 
-    // 4. Клонируем дескриптор порта.
-    let mut reader = port.try_clone().map_err(|e| e.to_string())?;
+    let mut guard = state.port.lock().map_err(|e| e.to_string())?;
+    *guard = Some(port);
 
-    // 5. Кладём оригинал порта в общее состояние.
-    {
-        let mut guard = state.port.lock().map_err(|e| e.to_string())?;
-        *guard = Some(port);
-    }
-
-    // 6. Создаём ЛИЧНЫЙ флаг остановки для нового читающего потока.
-    let stop_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    {
-        let mut stop_guard = state.reader_stop.lock().map_err(|e| e.to_string())?;
-        *stop_guard = Some(Arc::clone(&stop_flag));
-    }
-
-    // 7. Порождаем читающий поток.
-    std::thread::spawn(move || {
-        let mut buf = [0u8; 4096];
-        loop {
-            if stop_flag.load(Ordering::Relaxed) {
-                break;
-            }
-            match reader.read(&mut buf) {
-                Ok(n) if n > 0 => {
-                    let _ = app.emit("serial-data", buf[..n].to_vec());
-                }
-                Ok(_) => continue,
-                Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => continue,
-                Err(e) => {
-                    let _ = app.emit("serial-error", e.to_string());
-                    break;
-                }
-            }
-        }
-    });
-
+    eprintln!("[RUST] open_serial_port: порт открыт");
     Ok(())
 }
 
-/// Команда: записать байты в открытый порт.
+/// Команда: атомарная транзакция — записать пакет и прочитать ответ.
+///
+/// Возвращает все байты, которые успели прийти за timeout_ms миллисекунд.
+/// Прекращает чтение раньше, если после первого принятого байта наступает
+/// пауза 3 мс (типичный конец Modbus-ответа).
+///
+/// Никакого emit/listen — прямое возвращение результата во фронтенд.
+#[tauri::command]
+pub fn serial_transaction(
+    state: tauri::State<'_, SerialState>,
+    data: Vec<u8>,
+    timeout_ms: u64,
+) -> Result<Vec<u8>, String> {
+    let mut guard = state.port.lock().map_err(|e| e.to_string())?;
+    let port = guard.as_mut().ok_or_else(|| "Порт не открыт".to_string())?;
+
+    // 1. Пишем пакет.
+    port.write_all(&data)
+        .map_err(|e| format!("Ошибка записи в порт: {}", e))?;
+
+    // 2. Читаем ответ до timeout_ms или до 3 мс тишины после первого байта.
+    let mut result: Vec<u8> = Vec::new();
+    let start = Instant::now();
+    let overall_timeout = Duration::from_millis(timeout_ms);
+    let silence_timeout = Duration::from_millis(3);
+    let mut last_byte_at: Option<Instant> = None;
+    let mut buf = [0u8; 4096];
+
+    while start.elapsed() < overall_timeout {
+        match port.read(&mut buf) {
+            Ok(n) if n > 0 => {
+                result.extend_from_slice(&buf[..n]);
+                last_byte_at = Some(Instant::now());
+            }
+            Ok(_) => {
+                // 0 байт — просто продолжаем
+            }
+            Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
+                // Тишина. Если уже что-то приняли и пауза >= 3 мс — выходим.
+                if let Some(t) = last_byte_at {
+                    if t.elapsed() >= silence_timeout {
+                        break;
+                    }
+                }
+            }
+            Err(e) => {
+                return Err(format!("Ошибка чтения из порта: {}", e));
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+/// Команда: записать байты в открытый порт (без чтения).
+/// Оставлена для совместимости — используется на случай, если где-то
+/// нужна только запись без ожидания ответа.
 #[tauri::command]
 pub fn write_serial_port(
     state: tauri::State<'_, SerialState>,
     data: Vec<u8>,
 ) -> Result<(), String> {
     let mut guard = state.port.lock().map_err(|e| e.to_string())?;
-
     match guard.as_mut() {
         Some(port) => port.write_all(&data).map_err(|e| e.to_string()),
         None => Err("Порт не открыт".to_string()),
     }
 }
 
-/// Команда: закрыть порт и остановить читающий поток.
+/// Команда: закрыть порт.
 #[tauri::command]
 pub fn close_serial_port(state: tauri::State<'_, SerialState>) -> Result<(), String> {
-    let mut stop_guard = state.reader_stop.lock().map_err(|e| e.to_string())?;
-    if let Some(stop) = stop_guard.take() {
-        stop.store(true, Ordering::Relaxed);
+    // Флаг reader_stop больше не используется (читающего потока нет),
+    // но оставляем его для совместимости структуры SerialState.
+    {
+        let mut stop_guard = state.reader_stop.lock().map_err(|e| e.to_string())?;
+        if let Some(stop) = stop_guard.take() {
+            stop.store(true, Ordering::Relaxed);
+        }
     }
-    drop(stop_guard);
 
     let mut guard = state.port.lock().map_err(|e| e.to_string())?;
     *guard = None;
