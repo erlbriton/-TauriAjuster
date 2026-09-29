@@ -25,6 +25,19 @@ export interface DeviceRegistryItem {
    * по имени или если их не удастся сопоставить.
    */
   backupFileName?: string;
+  /**
+   * Флаг: запись создана по «лёгкому» пути (только первые 5 строк [DEVICE]).
+   * iniConfig в этом случае содержит только секцию [DEVICE], без RAM/XRAM/CD/FLASH.
+   * При первом клике по устройству в дереве полный файл читается с диска
+   * (read_ini_file), парсится, и флаг сбрасывается в false.
+   */
+  isHeaderOnly?: boolean;
+  /**
+   * Абсолютный путь к INI-файлу на диске. Заполняется при регистрации
+   * из tauri-autoloader и при синхронизации с диском. Нужен для того,
+   * чтобы при клике по «лёгкой» записи прочитать файл целиком.
+   */
+  path?: string;
 }
 
 /** Реестр: локации → массив устройств */
@@ -108,8 +121,15 @@ export function getSectionRange(
   return { start: minReg, count: maxReg - minReg + 1 };
 }
 
-// Регистрация устройства
-export function addDeviceToRegistry(iniConfig: IniConfig): boolean {
+// Регистрация устройства.
+//
+// extra — необязательные поля для «лёгкой» записи (isHeaderOnly, path).
+// Стандартные вызовы (addDeviceToRegistry(cfg)) не передают extra и
+// ведут себя как раньше.
+export function addDeviceToRegistry(
+  iniConfig: IniConfig,
+  extra?: { isHeaderOnly?: boolean; path?: string },
+): boolean {
   if (!iniConfig || !iniConfig.device) return false;
   const dev = iniConfig.device;
   const location = dev.location || 'Неизвестное место';
@@ -124,6 +144,8 @@ export function addDeviceToRegistry(iniConfig: IniConfig): boolean {
       displayText: deviceDisplayText,
       iniConfig,
       fullConfig: iniConfig.parseResult.rawSections as RawIniConfig,
+      isHeaderOnly: extra?.isHeaderOnly,
+      path: extra?.path,
     });
     return true;
   }

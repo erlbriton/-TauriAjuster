@@ -8,6 +8,7 @@
 //   - меню не импортирует рендер — только через setRenderCallback,
 //     который регистрируется в конце этого файла.
 
+import { invoke } from '@tauri-apps/api/core';
 import { populateDeviceForm } from '../ui/ui.js';
 import { renderModbusTable } from '../ui/tree.js';
 import {
@@ -16,11 +17,15 @@ import {
     getDeviceGroupKey,
     getDeviceLeafText,
     getAllDevices,
+    updateDeviceInRegistry,
+    deviceRegistry,
 } from './tree-core.js';
-import type { TreeGroupMode, DeviceRegistryItem } from './tree-core.js';
+import type { TreeGroupMode, DeviceRegistryItem, RawIniConfig } from './tree-core.js';
 import { hasAnyDirty, clearAllDirty } from './dirty-tracker.js';
 import { showConfirmDialog } from '../ui/confirm-dialog.js';
 import { saveIniChanges } from './save-ini.js';
+import { processSingleFileContent } from './file-loader.js';
+import { decodeTextBuffer } from './textFileReader.js';
 import type { AppState } from '../core/app-state.js';
 
 // Публичный API контекстного меню. Рендер его вызывает при правом клике
@@ -75,8 +80,84 @@ export function renderDeviceTree(): void {
                 }
                 clearAllDirty();
             }
+
             document.querySelectorAll('.tree-id-item.is-selected').forEach(el => el.classList.remove('is-selected'));
             liElement.classList.add('is-selected');
+
+            // ─── «ЛЁГКАЯ» ЗАПИСЬ: полная загрузка файла при первом клике ──
+            // При старте registerDeviceFromHeader прочитал только первые
+            // 5 строк файла. Полное содержимое читаем сейчас, при первом
+            // клике по устройству. После этого запись перестаёт быть
+            // isHeaderOnly, и последующие клики идут по обычному пути.
+            if (device.isHeaderOnly && device.path) {
+                const appState = (window as unknown as { appState?: AppState }).appState;
+                if (!appState) {
+                    console.error('[tree-render] appState не найден — невозможно загрузить файл');
+                    liElement.classList.remove('is-selected');
+                    return;
+                }
+
+                try {
+                    // Читаем полное содержимое файла с диска.
+                    const raw = await invoke<Uint8Array | number[]>('read_ini_file', {
+                        path: device.path,
+                    });
+                    const bytes = raw instanceof Uint8Array ? raw : Uint8Array.from(raw);
+                    const content = decodeTextBuffer(bytes.buffer as ArrayBuffer);
+
+                    const fileName = device.path.split(/[\\/]/).pop() || 'unknown.ini';
+
+                    // processSingleFileContent сам:
+                    //  - распарсит весь файл;
+                    //  - запишет в appState.currentIniContent/currentIniConfig;
+                    //  - обновит запись в fileStore (с полным content);
+                    //  - заполнит форму устройства (populateDeviceForm);
+                    //  - отрисует таблицу Modbus (renderModbusTable);
+                    //  - применит конфиги к осциллографу (applyChannelConfigs);
+                    //  - синхронизирует список INI с осциллографом;
+                    //  - вызовет событие 'app:ini-file-loaded' (автоопрос Modbus).
+                    await processSingleFileContent(
+                        content,
+                        fileName,
+                        appState,
+                        undefined,
+                        undefined,
+                        undefined,
+                        device.path,
+                    );
+
+                    // После полной загрузки обновляем запись в deviceRegistry:
+                    // сбрасываем isHeaderOnly и подменяем iniConfig/fullConfig
+                    // на полные. Саму структуру дерева не перерисовываем —
+                    // displayText не меняется (id/version/date уже были в шапке).
+                    const fullConfig = appState.currentIniConfig;
+                    if (fullConfig) {
+                        for (const loc in deviceRegistry) {
+                            const group = deviceRegistry[loc];
+                            if (!Array.isArray(group)) continue;
+                            const found = group.find((it) => it === device);
+                            if (found) {
+                                updateDeviceInRegistry(
+                                    loc,
+                                    found.id,
+                                    fullConfig,
+                                    fullConfig.parseResult.rawSections as RawIniConfig,
+                                );
+                                found.isHeaderOnly = false;
+                                break;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error('[tree-render] Ошибка полной загрузки файла:', err);
+                    // Снимаем выделение, чтобы пользователь мог кликнуть снова.
+                    liElement.classList.remove('is-selected');
+                    return;
+                }
+                return;
+            }
+
+            // ─── ОБЫЧНЫЙ ПУТЬ: запись уже загружена целиком ──────────────
             setCurrentIniConfig(device.iniConfig);
             populateDeviceForm(device.fullConfig['DEVICE']);
             renderModbusTable(device.iniConfig);

@@ -46,6 +46,17 @@ const appState: AppState = {
   pollDelayMs: 20,
 };
 
+// Публикуем appState глобально: он нужен модулям, которые не получают
+// его через параметры (например, tree-render.ts при полной загрузке файла
+// по клику). uiManager.ts по-прежнему использует свою внутреннюю ссылку —
+// это тот же самый объект, поэтому изменения видны везде.
+//
+// Приведение через unknown — потому что в src/ui/tree.ts поле window.appState
+// объявлено с другим типом (TableEditorState) для обратной совместимости.
+// Оба объявления указывают на один и тот же объект appState, но TS не
+// позволяет сузить тип без явного приведения.
+(window as unknown as { appState?: AppState }).appState = appState;
+
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         const oscContainer = document.getElementById('osc-container');
