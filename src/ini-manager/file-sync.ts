@@ -7,18 +7,16 @@
 //
 // Принцип: единственный источник истины — файлы на диске.
 
+import { invoke } from '@tauri-apps/api/core';
 import { IniParser as CoreIniParser, IniConfig } from '../core/ini/index.js';
 import type { AppState } from '../core/app-state.js';
 
 import { fileStore, getFileStore } from './file-store.js';
-import {
-    processSingleFileContent,
-    syncFilesToOscilloscope,
-} from './file-loader.js';
+import { syncFilesToOscilloscope } from './file-loader.js';
 import { decodeTextBuffer } from './textFileReader.js';
+import { registerDeviceFromHeader } from './header-loader.js';
 import {
     deviceRegistry,
-    addDeviceToRegistry,
     updateDeviceInRegistry,
     removeDeviceFromRegistry,
 } from './tree-core.js';
@@ -33,6 +31,7 @@ import { renderDeviceTree } from './tree-ui.js';
 interface DiskIniFileInfo {
     name: string;
     relative_path: string;
+    /** ВАЖНО: это только первые 5 строк файла (секция [DEVICE]). */
     bytes: Uint8Array | number[];
     last_modified_ms: number;
 }
@@ -84,31 +83,29 @@ export async function resyncDevicesFromDisk(appState: AppState): Promise<{
     };
 
     // ─── Шаг 1: сканируем папку Devices ─────────────────────────────────────
+    // Rust читает ТОЛЬКО первые 5 строк каждого файла + mtime.
+    // Это быстрый проход: на 700 файлов уходят миллисекунды, а не секунды.
     let files: DiskIniFileInfo[];
     let devicesPath: string | null;
     try {
-        files = await window.__TAURI__.core.invoke<DiskIniFileInfo[]>('scan_devices_folder');
-        devicesPath = await window.__TAURI__.core.invoke<string | null>('get_devices_folder_path');
+        files = await invoke<DiskIniFileInfo[]>('scan_devices_folder');
+        devicesPath = await invoke<string | null>('get_devices_folder_path');
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         result.errors.push(`Сканирование Devices не удалось: ${msg}`);
         return result;
     }
 
-    if (!devicesPath) {
-        // Папки Devices нет — ничего синхронизировать не с чем.
-        // Все известные записи в fileStore будут удалены ниже (файлов нет).
-        devicesPath = '';
-    }
+    if (!devicesPath) devicesPath = '';
 
-    // ─── Шаг 1.5: синхронизируем «красные» записи с папкой BackUp ───────────
+    // ─── Шаг 1.5: синхронизация «красных» записей с папкой BackUp ───────────
     // Записи с isBackup === true в deviceRegistry — это отражение файлов
     // из папки BackUp. Если файла там больше нет — запись должна исчезнуть
     // из дерева. Без этой проверки красные записи накапливаются: пользователь
     // может удалить файл из BackUp через файловый менеджер, а запись останется.
     let backupNames: string[] = [];
     try {
-        backupNames = await window.__TAURI__.core.invoke<string[]>('scan_backup_dir');
+        backupNames = await invoke<string[]>('scan_backup_dir');
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         result.errors.push(`Сканирование BackUp не удалось: ${msg}`);
@@ -132,138 +129,185 @@ export async function resyncDevicesFromDisk(appState: AppState): Promise<{
         }
     }
 
-    // ─── Шаг 2: строим карту «полный путь на диске → данные файла» ──────────
-    interface DiskEntry {
+    // ─── Шаг 2: строим карту «полный путь → запись со сканирования» ─────────
+    // Ключ — полный путь к файлу на диске. Значение — что вернул Rust
+    // (имя, первые 5 строк, mtime).
+    interface ScanEntry {
         info: DiskIniFileInfo;
-        content: string;
-        // Явно Uint8Array<ArrayBuffer>: TS 5.7+ требует именно такой тип
-        // для BlobPart в конструкторе File, иначе ругается на SharedArrayBuffer.
-        safeBytes: Uint8Array<ArrayBuffer>;
+        fullPath: string;
     }
-    const diskMap = new Map<string, DiskEntry>();
+    const diskMap = new Map<string, ScanEntry>();
     for (const info of files) {
-        const fullPath = devicesPath ? `${devicesPath}/${info.relative_path}` : info.relative_path;
-        try {
-            const raw = info.bytes instanceof Uint8Array
-                ? info.bytes
-                : Uint8Array.from(info.bytes);
-            const safeBytes: Uint8Array<ArrayBuffer> = new Uint8Array(raw);
-            const content = decodeTextBuffer(safeBytes.buffer);
-            diskMap.set(fullPath, { info, content, safeBytes });
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            result.errors.push(`${fullPath}: ошибка декодирования — ${msg}`);
-        }
+        const fullPath = devicesPath
+            ? `${devicesPath}/${info.relative_path}`
+            : info.relative_path;
+        diskMap.set(fullPath, { info, fullPath });
     }
 
-    // ─── Шаг 3: проходим по fileStore и приводим в соответствие с диском ────
+    // ─── Шаг 3: строим обратный индекс fileStore: путь → ключ ───────────────
+    // fileStore хранит записи под ключом location::id, но искать по нему
+    // при синхронизации нельзя: location/id могли измениться. Ищем по пути.
     const store = getFileStore();
-    const handledPaths = new Set<string>();
+    const pathToKey = new Map<string, string>();
+    for (const [key, entry] of store.entries()) {
+        if (entry.path) pathToKey.set(entry.path, key);
+    }
 
-    for (const [oldKey, entry] of Array.from(store.entries())) {
-        // Записи без path — не из Tauri-автозагрузки (например, ручное
-        // открытие файла). Их не трогаем: они вне модели «истина на диске».
-        if (!entry.path) continue;
+    // ─── Шаг 4: обрабатываем файлы, которые есть на диске ───────────────────
+    const seenPaths = new Set<string>();
 
-        const diskEntry = diskMap.get(entry.path);
-        if (!diskEntry) {
-            // Файла на диске нет — удаляем из памяти и реестра.
-            removeDeviceFromRegistry(entry.location, entry.id);
-            store.delete(oldKey);
-            result.removed++;
-            continue;
-        }
+    for (const [fullPath, scan] of diskMap.entries()) {
+        seenPaths.add(fullPath);
 
-        handledPaths.add(entry.path);
-
-        // Парсим содержимое с диска.
-        let newIniConfig: IniConfig;
-        let newRawConfig: RawIniConfig;
+        // 4a. Декодируем шапку (5 строк) — нужно для получения location/id
+        //     и для случая, когда устройство новое или переехало.
+        let headerContent: string;
         try {
-            const parser = new CoreIniParser();
-            const parseResult = parser.parse(diskEntry.content);
-            newIniConfig = new IniConfig(parseResult);
-            newRawConfig = parseResult.rawSections as RawIniConfig;
+            const raw = scan.info.bytes instanceof Uint8Array
+                ? scan.info.bytes
+                : Uint8Array.from(scan.info.bytes);
+            headerContent = decodeTextBuffer(raw.buffer as ArrayBuffer);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            result.errors.push(`${entry.path}: ошибка парсинга — ${msg}`);
+            result.errors.push(`${fullPath}: ошибка декодирования шапки — ${msg}`);
             continue;
         }
 
-        const newDev = newIniConfig.device;
-        const newLoc = newDev?.location || 'Неизвестное место';
-        const newId = newDev?.id || 'Без ID';
+        const existingKey = pathToKey.get(fullPath);
 
-        const locChanged = newLoc !== entry.location;
-        const idChanged = newId !== entry.id;
-        const contentChanged = diskEntry.content !== entry.content;
+        // 4b. Файла нет в fileStore — новое устройство. Регистрируем легко.
+        if (!existingKey) {
+            const ok = registerDeviceFromHeader(
+                headerContent,
+                scan.info.name,
+                fullPath,
+                scan.info.last_modified_ms,
+            );
+            if (ok) result.added++;
+            continue;
+        }
 
-        if (!locChanged && !idChanged && !contentChanged) {
+        // 4c. Файл есть в fileStore. Сравниваем mtime.
+        const entry = store.get(existingKey);
+        if (!entry) {
+            // Индекс устарел (крайне маловероятно) — считаем файл новым.
+            const ok = registerDeviceFromHeader(
+                headerContent,
+                scan.info.name,
+                fullPath,
+                scan.info.last_modified_ms,
+            );
+            if (ok) result.added++;
+            continue;
+        }
+
+        if (entry.lastModified === scan.info.last_modified_ms) {
+            // Файл не менялся — ничего не делаем. Это самый частый путь.
             result.unchanged++;
             continue;
         }
 
-        // Готовим свежий File-объект — чтобы entry.file больше не был
-        // устаревшим снимком (это лечит баг «редактор показывает старое»).
-        const freshFile = new File(
-            [diskEntry.safeBytes],
-            diskEntry.info.name,
-            { lastModified: diskEntry.info.last_modified_ms },
-        );
-
-        if (locChanged || idChanged) {
-            // Переезд: location или id изменились — старая запись
-            // не подходит ни по ключу, ни по группе в реестре.
-            removeDeviceFromRegistry(entry.location, entry.id);
-            store.delete(oldKey);
-
-            const newKey = `${newLoc}::${newId}`;
-            store.set(newKey, {
-                file: freshFile,
-                location: newLoc,
-                id: newId,
-                content: diskEntry.content,
-                lastModified: diskEntry.info.last_modified_ms,
-                path: entry.path,
-            });
-            addDeviceToRegistry(newIniConfig);
-        } else {
-            // Только содержимое изменилось — обновляем на месте.
-            updateDeviceInRegistry(entry.location, entry.id, newIniConfig, newRawConfig);
-            entry.content = diskEntry.content;
-            entry.file = freshFile;
-            entry.lastModified = diskEntry.info.last_modified_ms;
-        }
-        result.updated++;
-    }
-
-    // ─── Шаг 4: добавляем файлы, которых ещё нет в fileStore ────────────────
-    for (const [fullPath, diskEntry] of diskMap.entries()) {
-        if (handledPaths.has(fullPath)) continue;
-
+        // 4d. mtime изменился — файл редактировали. Нужно прочитать целиком.
+        //     Именно здесь мы платим полную стоимость чтения — но только
+        //     для реально изменённых файлов, а не для всех 717.
         try {
-            const file = new File(
-                [diskEntry.safeBytes],
-                diskEntry.info.name,
-                { lastModified: diskEntry.info.last_modified_ms },
-            );
-            await processSingleFileContent(
-                diskEntry.content,
-                diskEntry.info.name,
-                appState,
-                file,
-                undefined,
-                undefined,
-                fullPath,
-            );
-            result.added++;
+            const rawFull = await invoke<Uint8Array | number[]>('read_ini_file', {
+                path: fullPath,
+            });
+            const rawBytes = rawFull instanceof Uint8Array
+                ? rawFull
+                : Uint8Array.from(rawFull);
+            // Явно Uint8Array<ArrayBuffer>: TS 5.7+ требует именно такой тип
+            // для BlobPart в конструкторе File, иначе ругается на SharedArrayBuffer.
+            const fullBytes: Uint8Array<ArrayBuffer> = new Uint8Array(rawBytes);
+            const fullContent = decodeTextBuffer(fullBytes.buffer);
+
+            const parser = new CoreIniParser();
+            const parseResult = parser.parse(fullContent);
+            const newIniConfig = new IniConfig(parseResult);
+            const newRawConfig = parseResult.rawSections as RawIniConfig;
+
+            const newDev = newIniConfig.device;
+            if (!newDev) {
+                result.errors.push(`${fullPath}: нет секции [DEVICE]`);
+                continue;
+            }
+
+            const newLoc = newDev.location || 'Неизвестное место';
+            const newId = newDev.id || 'Без ID';
+            const newKey = `${newLoc}::${newId}`;
+
+            // Свежий File-объект с полным содержимым
+            const freshFile = new File([fullBytes], scan.info.name, {
+                lastModified: scan.info.last_modified_ms,
+            });
+
+            if (newKey !== existingKey) {
+                // location/id изменились — «переезд». Удаляем старую запись,
+                // добавляем новую.
+                removeDeviceFromRegistry(entry.location, entry.id);
+                store.delete(existingKey);
+
+                // Регистрируем через header-loader (получит isHeaderOnly=true),
+                // затем перезаписываем fileStore полным содержимым и
+                // сбрасываем флаг у записи в реестре.
+                registerDeviceFromHeader(
+                    fullContent,
+                    scan.info.name,
+                    fullPath,
+                    scan.info.last_modified_ms,
+                );
+                store.set(newKey, {
+                    file: freshFile,
+                    location: newLoc,
+                    id: newId,
+                    content: fullContent,
+                    lastModified: scan.info.last_modified_ms,
+                    path: fullPath,
+                });
+                updateDeviceInRegistry(newLoc, newId, newIniConfig, newRawConfig);
+                const group = deviceRegistry[newLoc];
+                if (Array.isArray(group)) {
+                    const item = group.find((it) => it.id === newId);
+                    if (item) item.isHeaderOnly = false;
+                }
+            } else {
+                // Тот же location/id, просто изменилось содержимое —
+                // обновляем запись «на месте».
+                updateDeviceInRegistry(
+                    entry.location,
+                    entry.id,
+                    newIniConfig,
+                    newRawConfig,
+                );
+                entry.content = fullContent;
+                entry.file = freshFile;
+                entry.lastModified = scan.info.last_modified_ms;
+                // На случай, если запись была «лёгкой» — сбрасываем флаг.
+                const group = deviceRegistry[entry.location];
+                if (Array.isArray(group)) {
+                    const item = group.find((it) => it.id === entry.id);
+                    if (item) item.isHeaderOnly = false;
+                }
+            }
+
+            result.updated++;
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            result.errors.push(`${fullPath}: ошибка добавления — ${msg}`);
+            result.errors.push(`${fullPath}: ошибка перечитывания — ${msg}`);
         }
     }
 
-    // ─── Шаг 5: перерисовка дерева ──────────────────────────────────────────
+    // ─── Шаг 5: удаляем из памяти файлы, которых больше нет на диске ────────
+    for (const [key, entry] of Array.from(store.entries())) {
+        if (!entry.path) continue;                 // не из Tauri-автозагрузки
+        if (seenPaths.has(entry.path)) continue;   // файл на диске есть
+        removeDeviceFromRegistry(entry.location, entry.id);
+        store.delete(key);
+        result.removed++;
+    }
+
+    // ─── Шаг 6: обновляем UI, если были изменения ───────────────────────────
     if (result.added > 0 || result.updated > 0 || result.removed > 0) {
         renderDeviceTree();
         syncFilesToOscilloscope();
