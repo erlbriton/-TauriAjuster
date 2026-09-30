@@ -11,6 +11,7 @@ import { getAllDevices, deviceRegistry, removeDeviceFromRegistry } from '../ini-
 import { getFileStore } from '../ini-manager/file-loader.js';
 import { encodeToWindows1251 } from '../core/encoding.js';
 import { showIdModal } from './ui.js';
+import { writeFile } from '@tauri-apps/plugin-fs';
 
 /**
  * Очищает имя файла от недопустимых символов для File System Access API (Windows).
@@ -275,7 +276,7 @@ async function handleBackupApply(): Promise<void> {
     console.log(`[backup] Имя файла: "${fileName}", oldPath=${oldPath ?? '—'}`);
 
     const { invoke } = await import('@tauri-apps/api/core');
-    const { writeFile } = await import('@tauri-apps/plugin-fs');
+    //const { writeFile } = await import('@tauri-apps/plugin-fs');
     const { ask } = await import('@tauri-apps/plugin-dialog');
 
     // ─── Ветка 1: старый файл найден — бэкап + перезапись ───────────────────

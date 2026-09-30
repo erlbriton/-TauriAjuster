@@ -30,6 +30,7 @@ import {
     hideNewDeviceModal,
     setNewDeviceStatus,
 } from './new-device-ui.js';
+import { writeFile } from '@tauri-apps/plugin-fs';
 
 /**
  * Определяет, запущено ли приложение в нативном режиме (Tauri v2).
@@ -179,7 +180,7 @@ export async function handleAddToBaseGeneric(src: AddToBaseSource): Promise<void
         // блоке ниже. В исходном варианте объявление стояло только в обычном
         // блоке, и в блоке обновления invoke/writeFile были ещё не определены.
         const { invoke } = await import('@tauri-apps/api/core');
-        const { writeFile } = await import('@tauri-apps/plugin-fs');
+        //const { writeFile } = await import('@tauri-apps/plugin-fs');
 
         // ─── Режим обновления прошивки ──────────────────────────────────────
         // Задача: заменить старый INI новым, предварительно сохранив копию

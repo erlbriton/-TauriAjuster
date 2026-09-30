@@ -14,6 +14,7 @@ const LS_KEY_ORG = 'report:organization';
 const LS_KEY_NUM = 'report:lastNumber';
 const LS_KEY_AUTO = 'report:autoIncrement';
 const DEFAULT_FILE_NAME = 'template.xlsx';
+import { writeFile } from '@tauri-apps/plugin-fs';
 
 interface ReportUIDeps {
     /** Возвращает appState для доступа к currentIniConfig */
@@ -201,7 +202,7 @@ async function saveReport(): Promise<void> {
 
     try {
         const { invoke } = await import('@tauri-apps/api/core');
-        const { writeFile } = await import('@tauri-apps/plugin-fs');
+      //  const { writeFile } = await import('@tauri-apps/plugin-fs');
 
         // Путь к папке XLT рядом с exe (создаётся автоматически).
         const xltDir = await invoke<string>('ensure_xlt_dir');
@@ -266,7 +267,7 @@ async function exportCsv(): Promise<void> {
         const fileName = `otchet_${serial}_${dateStr}.csv`;
 
         const { invoke } = await import('@tauri-apps/api/core');
-        const { writeFile } = await import('@tauri-apps/plugin-fs');
+      //  const { writeFile } = await import('@tauri-apps/plugin-fs');
 
         // Путь к папке XLT рядом с exe (создаётся автоматически).
         const xltDir = await invoke<string>('ensure_xlt_dir');

@@ -10,6 +10,7 @@ import type { RawIniConfig } from './tree-core.js';
 import { IniParser, IniConfig } from '../core/ini/index.js';
 import type { AppState } from '../core/app-state.js';
 import { clearAllDirty } from './dirty-tracker.js';
+import { writeFile } from '@tauri-apps/plugin-fs';
 
 
 // ─────────────────────────────────────────────
@@ -256,7 +257,7 @@ export async function saveIniChanges(appState: AppState): Promise<boolean> {
   try {
     // Нативное сохранение через Tauri FS.
     // filePath уже проверен в начале функции.
-    const { writeFile } = await import('@tauri-apps/plugin-fs');
+   // const { writeFile } = await import('@tauri-apps/plugin-fs');
     const encodedContent = encodeWindows1251(newContent);
     await writeFile(filePath, encodedContent);
 
