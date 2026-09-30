@@ -25,6 +25,16 @@ const HISTORY_LIMIT = 50;
 /** Скорость основного соединения до открытия окна (для восстановления) */
 let savedBaudRate: number | null = null;
 
+// ─── Состояние перетаскивания окна ──────────────────────────
+// Смещение окна относительно центра экрана (в пикселях).
+// Применяется через CSS transform: translate(...) — не ломает flex-центрирование
+// родителя и легко сбрасывается при каждом открытии окна.
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+let isDragging = false;
+let dragStartX = 0;
+let dragStartY = 0;
+
 // ────────────────────────────────────────────────────────────
 // История команд (нативный datalist)
 // ────────────────────────────────────────────────────────────
@@ -89,15 +99,11 @@ function clearHistory(): void {
 // ────────────────────────────────────────────────────────────
 
 export function initCmdlineUI(): void {
-    // Загружаем историю при старте приложения — до открытия окна.
     renderHistoryDatalist();
+    setupCmdlineDragging();
 
     document.getElementById('cmdlineBtn')?.addEventListener('click', () => {
         openCmdline();
-    });
-
-    document.getElementById('cmdlineCloseBtn')?.addEventListener('click', () => {
-        closeCmdline();
     });
 
     document.getElementById('cmdlineClearBtn')?.addEventListener('click', () => {
@@ -132,6 +138,59 @@ export function initCmdlineUI(): void {
 }
 
 // ────────────────────────────────────────────────────────────
+// Перетаскивание окна за заголовок
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Применяет текущее смещение к окну через transform.
+ * Не трогает position/left/top — работает поверх flex-центрирования.
+ */
+function applyDragTransform(): void {
+    const win = document.querySelector<HTMLElement>('.cmdline-window');
+    if (!win) return;
+    if (dragOffsetX === 0 && dragOffsetY === 0) {
+        win.style.transform = '';
+    } else {
+        win.style.transform = `translate(${dragOffsetX}px, ${dragOffsetY}px)`;
+    }
+}
+
+/**
+ * Вешает обработчики перетаскивания на заголовок окна.
+ * Вызывается один раз при инициализации UI.
+ */
+function setupCmdlineDragging(): void {
+    const header = document.querySelector<HTMLElement>('#cmdlineOverlay .cmdline-header');
+    const win = document.querySelector<HTMLElement>('.cmdline-window');
+    if (!header || !win) return;
+
+    header.addEventListener('mousedown', (e: MouseEvent) => {
+        // Клик по кнопке закрытия — не перетаскиваем, пусть сработает close.
+        const target = e.target as HTMLElement;
+        if (target.closest('.cmdline-close-btn')) return;
+
+        e.preventDefault();
+        isDragging = true;
+        dragStartX = e.clientX - dragOffsetX;
+        dragStartY = e.clientY - dragOffsetY;
+        document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', (e: MouseEvent) => {
+        if (!isDragging) return;
+        dragOffsetX = e.clientX - dragStartX;
+        dragOffsetY = e.clientY - dragStartY;
+        applyDragTransform();
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        document.body.style.userSelect = '';
+    });
+}
+
+// ────────────────────────────────────────────────────────────
 // Открытие / закрытие окна
 // ────────────────────────────────────────────────────────────
 
@@ -140,7 +199,11 @@ function openCmdline(): void {
     if (!overlay) return;
     overlay.classList.remove('hidden');
 
-    // Запоминаем скорость основного соединения — вернём при закрытии.
+    // Сбрасываем позицию окна — при каждом открытии оно по центру.
+    dragOffsetX = 0;
+    dragOffsetY = 0;
+    applyDragTransform();
+
     const mainBps = document.getElementById('baudSelect') as HTMLSelectElement | null;
     savedBaudRate = mainBps ? parseInt(mainBps.value, 10) || 115200 : 115200;
 

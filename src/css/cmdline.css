@@ -37,6 +37,13 @@
     background: #d8d8d8 !important;
     border-bottom: 1px solid #bbb !important;
     margin: 0 !important;
+    cursor: move !important;      /* весь заголовок — ручка перетаскивания */
+    user-select: none !important; /* не выделять текст при drag */
+}
+
+/* Кнопка закрытия не должна инициировать перетаскивание */
+.cmdline-close-btn {
+    cursor: pointer !important;
 }
 
 .cmdline-history-btn {
