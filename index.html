@@ -341,7 +341,10 @@
         <div class="cmdline-window">
           <div class="cmdline-header">
             <span class="cmdline-header-title">Командная строка</span>
-            <button id="cmdlineCloseBtn" class="cmdline-close-btn" type="button" title="Закрыть">✕</button>
+            <div class="cmdline-header-actions">
+              <button id="cmdlineClearHistoryBtn" class="cmdline-history-btn" type="button" title="Удалить историю команд">Удалить историю</button>
+              <button id="cmdlineCloseBtn" class="cmdline-close-btn" type="button" title="Закрыть">✕</button>
+            </div>
           </div>
           <div class="cmdline-controls">
             <span class="cmdline-label">BUS</span>
@@ -375,7 +378,8 @@
           </div>
           <div id="cmdlineOutput" class="cmdline-output"></div>
           <div class="cmdline-input-row">
-            <input id="cmdlineInput" class="cmdline-input" type="text" spellcheck="false"/>
+            <input id="cmdlineInput" class="cmdline-input" type="text" spellcheck="false" autocomplete="off" list="cmdlineHistory"/>
+            <datalist id="cmdlineHistory"></datalist>
           </div>
         </div>
       </div>

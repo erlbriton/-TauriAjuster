@@ -3,20 +3,95 @@
  * Командная строка Modbus (инструмент продвинутого пользователя).
  *
  * - пользователь вводит кадр БЕЗ CRC — CRC16 дописывается автоматически;
- * - в чёрное поле выводится ТОЛЬКО ответ контроллера,
- *   в формате выбранного MODE (HEX / ASCII / ASCII Filter);
+ * - в чёрное поле эхо поданной команды выводится с префиксом [You],
+ *   ответ контроллера — с [Ok] (зелёный), ошибка/таймаут — с [Err] (красный);
+ * - в поле ввода доступна история уникальных команд (datalist),
+ *   сохраняется в localStorage между запусками приложения, лимит — 50;
  * - BPS в окне автономный: при открытии запоминается скорость основного
  *   соединения, при закрытии окна — восстанавливается;
  * - ничего больше (осциллограф, таблица) не останавливается.
  */
 import { serialManager, calculateCRC } from '../serial/serial-actions.js';
+import { showConfirmDialog } from './confirm-dialog.js';
 
 type ModeType = 'HEX' | 'ASCII' | 'ASCII_FILTER';
+
+/** Ключ localStorage для истории команд. */
+const HISTORY_KEY = 'tauri-ajuster:cmdline-history';
+
+/** Максимум команд в истории. */
+const HISTORY_LIMIT = 50;
 
 /** Скорость основного соединения до открытия окна (для восстановления) */
 let savedBaudRate: number | null = null;
 
+// ────────────────────────────────────────────────────────────
+// История команд
+// ────────────────────────────────────────────────────────────
+
+/** Читает историю из localStorage. Возвращает [] при любой ошибке. */
+function loadHistory(): string[] {
+    try {
+        const raw = localStorage.getItem(HISTORY_KEY);
+        if (!raw) return [];
+        const parsed: unknown = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        return parsed.filter((x): x is string => typeof x === 'string');
+    } catch {
+        return [];
+    }
+}
+
+/** Сохраняет историю в localStorage. */
+function saveHistory(items: string[]): void {
+    try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
+    } catch (err) {
+        console.warn('[cmdline] Не удалось сохранить историю:', err);
+    }
+}
+
+/** Перерисовывает <datalist id="cmdlineHistory"> по текущей истории. */
+function renderHistoryDatalist(): void {
+    const datalist = document.getElementById('cmdlineHistory') as HTMLDataListElement | null;
+    if (!datalist) return;
+    datalist.innerHTML = '';
+    for (const item of loadHistory()) {
+        const opt = document.createElement('option');
+        opt.value = item;
+        datalist.appendChild(opt);
+    }
+}
+
+/**
+ * Добавляет команду в историю.
+ * Уникальность: если команда уже была — она поднимается в начало (как в bash).
+ * Лимит: не больше HISTORY_LIMIT последних команд.
+ */
+function addToHistory(cmd: string): void {
+    const trimmed = cmd.trim();
+    if (!trimmed) return;
+    const items = loadHistory();
+    const filtered = items.filter((x) => x !== trimmed);
+    filtered.unshift(trimmed);
+    saveHistory(filtered.slice(0, HISTORY_LIMIT));
+    renderHistoryDatalist();
+}
+
+/** Полностью очищает историю команд. */
+function clearHistory(): void {
+    saveHistory([]);
+    renderHistoryDatalist();
+}
+
+// ────────────────────────────────────────────────────────────
+// Инициализация UI
+// ────────────────────────────────────────────────────────────
+
 export function initCmdlineUI(): void {
+    // Загружаем историю при старте приложения — до открытия окна.
+    renderHistoryDatalist();
+
     document.getElementById('cmdlineBtn')?.addEventListener('click', () => {
         openCmdline();
     });
@@ -28,6 +103,11 @@ export function initCmdlineUI(): void {
     document.getElementById('cmdlineClearBtn')?.addEventListener('click', () => {
         const output = document.getElementById('cmdlineOutput');
         if (output) output.textContent = '';
+    });
+
+    document.getElementById('cmdlineClearHistoryBtn')?.addEventListener('click', async () => {
+        const ok = await showConfirmDialog('Удалить всю историю команд?');
+        if (ok) clearHistory();
     });
 
     const bpsSelect = document.getElementById('cmdlineBpsSelect') as HTMLSelectElement | null;
@@ -114,16 +194,23 @@ async function sendCommand(frameText: string, bus: string, mode: ModeType): Prom
     const output = document.getElementById('cmdlineOutput');
     if (!output || !frameText) return;
 
+    // Эхо поданной команды — как ввёл пользователь, без нормализации.
+    appendLine(output, frameText, '[You]', 'cmdline-prefix-you');
+
     if (bus === 'TCP') {
-        appendLine(output, 'MODBUS TCP не реализован в WEB-версии.');
+        appendLine(output, 'MODBUS TCP не реализован в WEB-версии.', '[Err]', 'cmdline-prefix-err');
         return;
     }
 
     const bytes = parseHexFrame(frameText);
     if (!bytes) {
-        appendLine(output, 'Ошибка: неверный формат кадра (ожидается hex без CRC, напр.: 01 03 00 00 00 02)');
+        appendLine(output, 'Неправильный формат запроса', '[Err]', 'cmdline-prefix-err');
         return;
     }
+
+    // В историю попадают только корректно разобранные кадры.
+    // Опечатки (типа "83475gfg") историю не засоряют.
+    addToHistory(frameText);
 
     // CRC16, младший байт первым — как во всём приложении.
     const crc = calculateCRC(bytes);
@@ -135,15 +222,16 @@ async function sendCommand(frameText: string, bus: string, mode: ModeType): Prom
     try {
         const reply = await serialManager.executeTransaction(packet, checkReplyComplete, 1000);
         if (reply && reply.length > 0) {
-            appendLine(output, formatReply(reply, mode));
+            appendLine(output, formatReply(reply, mode), '[Ok]', 'cmdline-prefix-ok');
         } else {
-            // Контроллер промолчал: в чёрное поле ничего не пишем,
+            // Контроллер промолчал: сообщаем пользователю в чёрном поле,
             // диагностика — в консоль.
             console.log('[cmdline] нет ответа от устройства');
+            appendLine(output, 'Нет ответа от устройства', '[Err]', 'cmdline-prefix-err');
         }
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        appendLine(output, 'Ошибка транзакции: ' + message);
+        appendLine(output, 'Ошибка транзакции: ' + message, '[Err]', 'cmdline-prefix-err');
     }
 }
 
@@ -192,7 +280,35 @@ function formatReply(reply: Uint8Array, mode: ModeType): string {
         .join('');
 }
 
-function appendLine(output: HTMLElement, text: string): void {
-    output.textContent += text + '\n';
+/**
+ * Добавляет строку в чёрное поле.
+ *
+ * Если prefix не задан — выводит обычную строку без префикса
+ * (используется для шапки окна: Command Line / WEB Ajuster / www.intmash.ru).
+ * Если prefix задан — добавляет слева цветной маркер ([You]/[Ok]/[Err]),
+ * а сам текст переносится с выравниванием под первым словом.
+ */
+function appendLine(
+    output: HTMLElement,
+    text: string,
+    prefix?: string,
+    prefixClass?: string,
+): void {
+    const line = document.createElement('div');
+    line.className = 'cmdline-line';
+
+    if (prefix) {
+        const prefixEl = document.createElement('span');
+        prefixEl.className = 'cmdline-prefix' + (prefixClass ? ' ' + prefixClass : '');
+        prefixEl.textContent = prefix;
+        line.appendChild(prefixEl);
+    }
+
+    const textEl = document.createElement('span');
+    textEl.className = 'cmdline-text';
+    textEl.textContent = text;
+    line.appendChild(textEl);
+
+    output.appendChild(line);
     output.scrollTop = output.scrollHeight;
 }

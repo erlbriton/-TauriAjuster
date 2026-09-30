@@ -111,7 +111,7 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
     console.log(`[UI] Получено событие "контроллер не отвечает" (подряд ошибок: ${count})`);
 
     // Показываем компактное окно
-    showCompactError('Контроллер не отвечает. Проверьте адрес и подключение.');
+    showCompactError('Контроллер не отвечает. Проверьте адрес и подключение.', 3000);
 
     // Если осциллограф открыт — замораживаем его рендер
     const osc = window.osc;

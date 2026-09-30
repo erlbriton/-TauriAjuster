@@ -197,7 +197,7 @@ export function initDeviceManagementUI(deps: DeviceManagementUIDeps): void {
         }
       } else {
         console.warn('[UI] updateDeviceRegisters вернул false — связь не удалась');
-        showCompactError('Контроллер не отвечает. Проверьте адрес и подключение.');
+        showCompactError('Контроллер не отвечает. Проверьте адрес и подключение.', 3000);
       }
     } catch (err) {
       console.error("Ошибка при обновлении:", err);

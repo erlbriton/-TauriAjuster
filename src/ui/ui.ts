@@ -39,7 +39,7 @@ export function showIdModal(text: string): void {
  * Компактное окно ошибки в цветах таблицы.
  * Показывается при проблемах связи независимо от осциллографа.
  */
-export function showCompactError(text: string): void {
+export function showCompactError(text: string, autoCloseMs?: number): void {
     const existing = document.querySelector('.compact-error-overlay');
     if (existing) existing.remove();
 
@@ -119,6 +119,17 @@ export function showCompactError(text: string): void {
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
     btn.focus();
+
+    // Автозакрытие, если задан таймаут. Используется для неинформативных
+    // уведомлений (например, «Контроллер не отвечает»), которые не требуют
+    // явного подтверждения пользователем. Ручное закрытие кнопкой OK или
+    // кликом по оверлею по-прежнему работает.
+    if (typeof autoCloseMs === 'number' && autoCloseMs > 0) {
+        setTimeout(() => {
+            // На случай, если оверлей уже удалён вручную — remove() безопасен.
+            overlay.remove();
+        }, autoCloseMs);
+    }
 }
 
 /**

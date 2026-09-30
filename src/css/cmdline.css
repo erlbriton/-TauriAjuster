@@ -39,6 +39,27 @@
     margin: 0 !important;
 }
 
+.cmdline-header-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+
+.cmdline-history-btn {
+    padding: 3px 10px !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    font-size: 11px !important;
+    background: #ffffff !important;
+    color: #333333 !important;
+    border: 1px solid #999 !important;
+    border-radius: 3px !important;
+    cursor: pointer !important;
+}
+
+.cmdline-history-btn:hover {
+    background: #e8e8e8 !important;
+}
+
 .cmdline-header-title {
     font-family: 'Segoe UI', Arial, sans-serif !important;
     font-size: 13px !important;
@@ -123,6 +144,38 @@
     padding: 8px 10px !important;
     margin: 0 !important;
     overflow-y: auto !important;
+}
+
+/* Одна строка вывода. Префикс — слева, текст переносится
+   с выравниванием под первым словом (flex + align-items: flex-start). */
+.cmdline-line {
+    display: flex !important;
+    align-items: flex-start !important;
+    gap: 6px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.cmdline-prefix {
+    flex-shrink: 0 !important;
+    font-weight: 600 !important;
+    white-space: nowrap !important;
+}
+
+.cmdline-prefix-you {
+    color: #b0b0b0 !important;
+}
+
+.cmdline-prefix-ok {
+    color: #3ddc84 !important;
+}
+
+.cmdline-prefix-err {
+    color: #ff5555 !important;
+}
+
+.cmdline-text {
+    min-width: 0 !important;
     white-space: pre-wrap !important;
     word-break: break-all !important;
 }
