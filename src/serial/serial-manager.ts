@@ -68,8 +68,18 @@ export class SerialManager {
                 throw new Error("[SerialManager] Порт не инициализирован для транзакции.");
             }
 
+            // Выбор Rust-команды по типу транспорта:
+            //  - 'tcp'    → tcp_transaction (Modbus RTU over TCP/IP, сокет);
+            //  - 'serial' или undefined → serial_transaction (COM-порт).
+            // Поле transportKind объявлено в ISerialPort как необязательное,
+            // поэтому старые реализации (TauriSerialPort без этого поля)
+            // продолжают работать через serial_transaction.
+            const commandName = port.transportKind === 'tcp'
+                ? 'tcp_transaction'
+                : 'serial_transaction';
+
             const dataArray = Array.from(packet);
-            const response = await invoke<number[]>('serial_transaction', {
+            const response = await invoke<number[]>(commandName, {
                 data: dataArray,
                 timeoutMs,
             });
@@ -79,11 +89,23 @@ export class SerialManager {
             console.error("[SerialManager] Ошибка транзакции:", err);
 
             const msg = err instanceof Error ? err.message : String(err);
+
+            // Fatal-ошибки — те, после которых handle порта/сокета
+            // считается мёртвым и требуется переоткрытие. Для serial
+            // и TCP наборы сообщений разные, но проверяем все вместе:
+            // ложное срабатывание notifyDisconnect безвредно (он просто
+            // сбросит isConnected в false).
             const isFatal =
+                // serial
                 msg.includes('фатальная ошибка') ||
                 msg.includes('os error 22') ||
                 msg.includes('Устройство не опознает команду') ||
-                msg.includes('Порт не открыт');
+                msg.includes('Порт не открыт') ||
+                // TCP
+                msg.includes('TCP-соединение не открыто') ||
+                msg.includes('Соединение разорвано') ||
+                msg.includes('Ошибка записи в сокет') ||
+                msg.includes('Ошибка чтения из сокета');
 
             if (isFatal && port) {
                 const maybe = port as unknown as { notifyDisconnect?: () => void };

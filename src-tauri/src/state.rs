@@ -1,6 +1,7 @@
 // src-tauri/src/state.rs
 // Глобальное состояние приложения, доступное во всех Tauri-командах.
 
+use std::net::TcpStream;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
@@ -21,6 +22,22 @@ impl Default for SerialState {
         Self {
             port: Mutex::new(None),
             reader_stop: Mutex::new(None),
+        }
+    }
+}
+
+/// Состояние TCP-соединения для Modbus RTU over TCP/IP.
+/// Хранит один активный сокет. Если None — соединение не открыто.
+/// Используется командами open_tcp_connection / tcp_transaction /
+/// close_tcp_connection (см. src/commands/tcp.rs).
+pub struct TcpState {
+    pub stream: Mutex<Option<TcpStream>>,
+}
+
+impl Default for TcpState {
+    fn default() -> Self {
+        Self {
+            stream: Mutex::new(None),
         }
     }
 }

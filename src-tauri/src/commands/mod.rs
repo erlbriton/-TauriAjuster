@@ -6,4 +6,5 @@ pub mod greet;
 pub mod ini;
 pub mod fs;
 pub mod serial;
+pub mod tcp;
 pub mod viewer;

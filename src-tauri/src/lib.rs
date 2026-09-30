@@ -25,6 +25,9 @@ pub fn run() {
         // Регистрируем общее состояние serial-порта:
         // теперь все команды видят один и тот же открытый порт
         .manage(state::SerialState::default())
+        // Регистрируем состояние TCP-соединения (Modbus RTU over TCP/IP).
+        // Хранит один активный TcpStream; команды tcp_* работают с ним.
+        .manage(state::TcpState::default())
         // Регистрируем состояние конфигурации: путь к текущей базовой
         // папке и к папке exe. Читается из controllers.txt при старте.
         .manage(app_config::AppConfigState::from_startup())
@@ -49,6 +52,9 @@ pub fn run() {
             commands::serial::serial_transaction,
             commands::serial::write_serial_port,
             commands::serial::close_serial_port,
+            commands::tcp::open_tcp_connection,
+            commands::tcp::tcp_transaction,
+            commands::tcp::close_tcp_connection,
             commands::fs::open_in_default_editor,
             commands::ini::get_devices_folder_path,
             commands::ini::ensure_device_subdir,

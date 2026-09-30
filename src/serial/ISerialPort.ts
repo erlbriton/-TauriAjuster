@@ -24,6 +24,13 @@ export interface ISerialPort {
     /** Открыт ли порт в данный момент. */
     readonly isConnected: boolean;
 
+    /**
+     * Тип транспорта. Используется SerialManager, чтобы выбрать Rust-команду
+     * для транзакции: 'serial' → serial_transaction, 'tcp' → tcp_transaction.
+     * Если поле не задано — считается 'serial' (по умолчанию).
+     */
+    readonly transportKind?: 'serial' | 'tcp';
+
     /** Открыть порт (в браузере — с диалогом выбора порта пользователем). */
     connect(baudRate?: number): Promise<void>;
 
