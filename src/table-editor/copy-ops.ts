@@ -284,6 +284,21 @@ export async function copyBaseToController(): Promise<void> {
         }
     }
 
+    // КРИТИЧНО: если фоновый опрос был активен до копирования — за время
+    // записи цикл readLoop() вышел из while (isPolling был false) и в своём
+    // finally выставил isLoopRunning = false. Возврат isPolling = true сам
+    // по себе цикл НЕ возобновляет — нужно явно попросить UI перезапустить
+    // опрос. Без этого осциллограф замирает: маркеры идут (PixiJS рисует
+    // последний буфер), а данные не обновляются. Кнопка «Обновить» —
+    // единственный способ оживить опрос до этого фикса.
+    //
+    // Тот же механизм уже используется в controller-write.ts после
+    // одиночной записи ячейки — здесь подключаем его для массового
+    // копирования База → Контроллер.
+    if (wasPolling) {
+        window.dispatchEvent(new CustomEvent('app:request-polling-restart'));
+    }
+
     if (failed.length === 0) {
         console.log('[BASE→CONTROLLER] Все параметры записаны и проверены.');
     } else {
