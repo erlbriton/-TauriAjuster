@@ -106,6 +106,10 @@ export function initCmdlineUI(): void {
         openCmdline();
     });
 
+    document.getElementById('cmdlineCloseBtn')?.addEventListener('click', () => {
+        closeCmdline();
+    });
+
     document.getElementById('cmdlineClearBtn')?.addEventListener('click', () => {
         const output = document.getElementById('cmdlineOutput');
         if (output) output.textContent = '';
@@ -165,14 +169,19 @@ function setupCmdlineDragging(): void {
     if (!header || !win) return;
 
     header.addEventListener('mousedown', (e: MouseEvent) => {
-        // Клик по кнопке закрытия — не перетаскиваем, пусть сработает close.
         const target = e.target as HTMLElement;
-        if (target.closest('.cmdline-close-btn')) return;
 
-        e.preventDefault();
+        // Любая интерактивная цель внутри header (кнопки, поля) —
+        // не начинаем drag и НЕ вызываем preventDefault, чтобы не
+        // подавить click на кнопке закрытия. В WebView2 preventDefault
+        // на mousedown иногда блокирует последующий click у соседних
+        // элементов — из-за этого окно переставало закрываться.
+        if (target.closest('button, input, select, a, textarea')) return;
+
         isDragging = true;
         dragStartX = e.clientX - dragOffsetX;
         dragStartY = e.clientY - dragOffsetY;
+        // Запрет выделения на время drag — через CSS-свойство, без preventDefault.
         document.body.style.userSelect = 'none';
     });
 

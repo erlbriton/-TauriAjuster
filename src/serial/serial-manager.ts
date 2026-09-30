@@ -141,7 +141,7 @@ export class SerialManager {
         }
 
         // CRC в Modbus RTU: два последних байта, младший первым.
-        const payload = bytes.slice(0, bytes.length - 2);
+        const payload = bytes.slice(0, bytes.length - 2);////////////////////////////////
         const expected = calculateCRC(payload);
         const actual = bytes[bytes.length - 2] | (bytes[bytes.length - 1] << 8);
 
@@ -150,7 +150,21 @@ export class SerialManager {
         }
 
         return { kind: 'ok', bytes };
-    }
+    }//////////////////////////////////////////////////////////////////////////////////////
+
+//         const payload = bytes.slice(0, bytes.length - 2);
+//     // ВРЕМЕННО: намеренно портим вычисленный CRC, чтобы любой валидный
+//     // ответ устройства выглядел как bad_crc. Только для проверки UI.
+//     // УДАЛИТЬ после теста!
+//     const expected = calculateCRC(payload) ^ 0xFFFF;
+//     const actual = bytes[bytes.length - 2] | (bytes[bytes.length - 1] << 8);
+
+//     if (expected !== actual) {
+//         return { kind: 'bad_crc', bytes, expected, actual };
+//     }
+//     return { kind: 'ok', bytes };
+// }
+
 }
 
 export const serialManager = new SerialManager();
