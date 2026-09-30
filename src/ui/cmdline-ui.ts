@@ -26,7 +26,7 @@ const HISTORY_LIMIT = 50;
 let savedBaudRate: number | null = null;
 
 // ────────────────────────────────────────────────────────────
-// История команд
+// История команд (нативный datalist)
 // ────────────────────────────────────────────────────────────
 
 /** Читает историю из localStorage. Возвращает [] при любой ошибке. */
@@ -220,18 +220,35 @@ async function sendCommand(frameText: string, bus: string, mode: ModeType): Prom
     packet[bytes.length + 1] = (crc >> 8) & 0xff;
 
     try {
-        const reply = await serialManager.executeTransaction(packet, checkReplyComplete, 1000);
-        if (reply && reply.length > 0) {
-            appendLine(output, formatReply(reply, mode), '[Ok]', 'cmdline-prefix-ok');
-        } else {
-            // Контроллер промолчал: сообщаем пользователю в чёрном поле,
-            // диагностика — в консоль.
-            console.log('[cmdline] нет ответа от устройства');
-            appendLine(output, 'Нет ответа от устройства', '[Err]', 'cmdline-prefix-err');
+        const result = await serialManager.executeTransactionVerbose(packet, 1000);
+
+        if (result.kind === 'ok') {
+            appendLine(output, formatReply(result.bytes, mode), '[Ok]', 'cmdline-prefix-ok');
+        } else if (result.kind === 'bad_crc') {
+            // Устройство ответило, но CRC не сходится. Показываем сырые байты,
+            // чтобы пользователь видел, что именно пришло.
+            const hexAll = formatReply(result.bytes, 'HEX');
+            appendLine(
+                output,
+                `Ответ с неверным CRC: ${hexAll}`,
+                '[Err]',
+                'cmdline-prefix-err',
+            );
+        } else if (result.kind === 'too_short') {
+            // Пришли единичные байты — это не ответ, а обрывок (помехи, эхо).
+            const hexAll = formatReply(result.bytes, 'HEX');
+            appendLine(output, `Ответ короче 4 байт: ${hexAll}`, '[Err]', 'cmdline-prefix-err');
+        } else if (result.kind === 'timeout') {
+            // Устройство молчало всё время таймаута.
+            appendLine(output, 'Нет ответа от устройства (таймаут 1000 мс)', '[Err]', 'cmdline-prefix-err');
+        } else if (result.kind === 'error') {
+            appendLine(output, 'Ошибка транзакции: ' + result.message, '[Err]', 'cmdline-prefix-err');
         }
     } catch (err) {
+        // Сюда попасть не должны: executeTransactionVerbose не бросает.
+        // Оставлено на случай неожиданных исключений в самом обработчике.
         const message = err instanceof Error ? err.message : String(err);
-        appendLine(output, 'Ошибка транзакции: ' + message, '[Err]', 'cmdline-prefix-err');
+        appendLine(output, 'Неожиданная ошибка: ' + message, '[Err]', 'cmdline-prefix-err');
     }
 }
 

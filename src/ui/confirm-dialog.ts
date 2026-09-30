@@ -17,7 +17,10 @@ export function showConfirmDialog(message: string): Promise<boolean> {
         overlay.style.display = 'flex';
         overlay.style.alignItems = 'center';
         overlay.style.justifyContent = 'center';
-        overlay.style.zIndex = '10000';
+        // 12000 — выше cmdline-overlay (11700) и любых других модалок.
+        // Иначе диалог подтверждения окажется под окном «Командная строка»
+        // и пользователь его не увидит.
+        overlay.style.zIndex = '12000';
 
         const dialog = document.createElement('div');
         dialog.style.background = '#f0f0f0';
@@ -137,7 +140,8 @@ export function showFailedParamsList(items: { id: string; name: string }[]): voi
     overlay.style.display = 'flex';
     overlay.style.alignItems = 'center';
     overlay.style.justifyContent = 'center';
-    overlay.style.zIndex = '10000';
+    // 12000 — выше cmdline-overlay (11700), иначе окно окажется под ним.
+    overlay.style.zIndex = '12000';
 
     const dialog = document.createElement('div');
     dialog.style.background = '#f0f0f0';
@@ -209,7 +213,8 @@ export function showAddressDialog(currentAddr: number): Promise<number | null> {
         overlay.style.display = 'flex';
         overlay.style.alignItems = 'center';
         overlay.style.justifyContent = 'center';
-        overlay.style.zIndex = '10000';
+        // 12000 — выше cmdline-overlay (11700), иначе окно окажется под ним.
+        overlay.style.zIndex = '12000';
 
         const dialog = document.createElement('div');
         dialog.style.background = '#f0f0f0';
