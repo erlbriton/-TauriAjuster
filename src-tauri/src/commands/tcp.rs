@@ -13,7 +13,7 @@
 // write → read loop до timeout_ms или до 3 мс тишины после первого байта.
 
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
 use std::time::{Duration, Instant};
 
 use crate::state::TcpState;
@@ -40,8 +40,38 @@ pub fn open_tcp_connection(
     }
 
     let address = format!("{}:{}", host, port);
-    let stream = TcpStream::connect(&address)
-        .map_err(|e| format!("Не удалось подключиться к {}: {}", address, e))?;
+
+    // Разрешаем имя хоста в один или несколько SocketAddr.
+    // to_socket_addrs может блокироваться на DNS, но обычно быстро.
+    let addr_iter = address
+        .to_socket_addrs()
+        .map_err(|e| format!("Не удалось разрешить адрес {}: {}", address, e))?;
+
+    // connect_timeout — 3 секунды. Без него Linux ждёт OS-дефолт (~2 мин),
+    // из-за чего UI зависал на длительное время при недоступном адресе.
+    const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
+
+    let mut stream_opt: Option<TcpStream> = None;
+    let mut last_err: Option<String> = None;
+    for addr in addr_iter {
+        match TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT) {
+            Ok(s) => {
+                stream_opt = Some(s);
+                break;
+            }
+            Err(e) => {
+                last_err = Some(format!("{} ({})", e, addr));
+            }
+        }
+    }
+
+    let stream = stream_opt.ok_or_else(|| {
+        format!(
+            "Не удалось подключиться к {}: {}",
+            address,
+            last_err.unwrap_or_else(|| "неизвестная ошибка".to_string())
+        )
+    })?;
 
     // Read timeout 1 мс — чтобы read() возвращался регулярно, а tcp_transaction
     // мог проверять общий timeout и silence timeout.

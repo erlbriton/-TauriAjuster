@@ -4,7 +4,9 @@
  * - Выбор скорости (Baud Rate)
  * - Переключение режима шины (RTU / TCP)
  * - Изменение адреса Modbus
- * - Обработчики событий: контроллер не отвечает, перезапуск опроса, защита от закрытия вкладки
+ * - Подключение/отключение TCP-соединения (Modbus RTU over TCP/IP)
+ * - Обработчики событий: контроллер не отвечает, перезапуск опроса,
+ *   защита от закрытия вкладки
  */
 
 import type { ISerialPort } from '../../serial/ISerialPort.js';
@@ -12,7 +14,13 @@ import type { AppState } from '../../core/app-state.js';
 import { showIdModal, showCompactError } from '../ui.js';
 import { showAddressDialog } from '../confirm-dialog.js';
 import { hasAnyDirty } from '../../ini-manager/dirty-tracker.js';
+import { TauriSerialPort } from '../../serial/tauri-serial.js';
+import { TauriTcpPort } from '../../serial/tauri-tcp.js';
+import { serialManager } from '../../serial/serial-manager.js';
 
+/** Ключи localStorage для сохранения IP и порта TCP-контроллера. */
+const TCP_HOST_KEY = 'tauri-ajuster:tcp-host';
+const TCP_PORT_KEY = 'tauri-ajuster:tcp-port';
 
 export interface CommunicationSettingsUIDeps {
   serial: ISerialPort;
@@ -51,11 +59,72 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
     buffers
   } = deps;
 
-  // --- Обработчик смены скорости (Baud Rate) ---
+  // ─── Текущий транспорт ─────────────────────────────────────────────────
+  // Изначально — COM-порт, созданный в main.ts. При переключении BUS
+  // заменяется на TauriTcpPort (или обратно на TauriSerialPort).
+  // serialManager.serial тоже подменяется через init() — так все транзакции
+  // (readLoop, запись в контроллер, командная строка) идут через новый порт.
+  let currentPort: ISerialPort = serial;
+
+  // ─── Ссылки на элементы UI ─────────────────────────────────────────────
+  const tcpIpInput = document.getElementById('tcpIpInput') as HTMLInputElement | null;
+  const tcpPortInput = document.getElementById('tcpPortInput') as HTMLInputElement | null;
+  const tcpConnectBtn = document.getElementById('tcpConnectBtn') as HTMLButtonElement | null;
+
+  // ─── Сохранение и восстановление IP/Port в localStorage ────────────────
+  const savedHost = localStorage.getItem(TCP_HOST_KEY);
+  const savedPort = localStorage.getItem(TCP_PORT_KEY);
+  if (savedHost && tcpIpInput) tcpIpInput.value = savedHost;
+  if (savedPort && tcpPortInput) tcpPortInput.value = savedPort;
+
+  tcpIpInput?.addEventListener('change', () => {
+    localStorage.setItem(TCP_HOST_KEY, tcpIpInput.value.trim());
+  });
+  tcpPortInput?.addEventListener('change', () => {
+    localStorage.setItem(TCP_PORT_KEY, tcpPortInput.value.trim());
+  });
+
+  // ─── Вспомогательные функции ───────────────────────────────────────────
+
+  /** Читает endpoint из полей IP/Port. Fallback — 192.168.1.234:502. */
+  const getTcpEndpoint = (): { host: string; port: number } => {
+    const host = (tcpIpInput?.value ?? '').trim() || '192.168.1.234';
+    const portRaw = parseInt((tcpPortInput?.value ?? '').trim(), 10);
+    const port = Number.isInteger(portRaw) && portRaw > 0 && portRaw <= 65535 ? portRaw : 502;
+    return { host, port };
+  };
+
+  /** Обновляет надпись на кнопке TCP: '0' / '1' / 'E'. */
+  const updateTcpButtonState = (text: '0' | '1' | 'E'): void => {
+    if (!tcpConnectBtn) return;
+    tcpConnectBtn.textContent = text;
+  };
+
+  /**
+   * Подписывает порт на событие обрыва соединения.
+   *
+   * Вызывается SerialManager.notifyDisconnect() при фатальной ошибке
+   * транспорта (обрыв сети, выдернутый кабель, ERROR_BAD_COMMAND и т.п.).
+   * Внутри порт уже выставил isConnected = false — нам остаётся
+   * привести UI в соответствие:
+   *   - TCP: кнопка → 'E' (ошибка), чтобы пользователь видел обрыв
+   *     и мог переподключиться кликом;
+   *   - RTU: визуального индикатора нет, но readLoop сам остановится,
+   *     потому что проверяет serial.isConnected на каждой итерации.
+   */
+  const attachDisconnectHandler = (port: ISerialPort, isTcpMode: boolean): void => {
+    port.onDisconnect(() => {
+      console.log(`[UI] Обрыв соединения (${isTcpMode ? 'TCP' : 'RTU'})`);
+      if (isTcpMode) {
+        updateTcpButtonState('E');
+      }
+    });
+  };
+
+  // ─── Обработчик смены скорости (Baud Rate) ─────────────────────────────
   if (baudSelect) {
     baudSelect.addEventListener('change', () => {
       const newBaudRate = parseInt(baudSelect.value, 10) || 115200;
-      
       if (serial.isConnected) {
         console.log(`[UI] Скорость изменена на ${newBaudRate}. Для применения необходимо переподключиться.`);
       } else {
@@ -64,12 +133,63 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
     });
   }
 
-  // --- Переключение BUS: MODBUS RTU <-> MODBUS TCP/IP ---
+  // ─── Переключение BUS: MODBUS RTU <-> MODBUS TCP/IP ────────────────────
   const applyBusMode = (): void => {
     const isTcp = busSelect?.value === 'TCP';
     if (rtuControls) rtuControls.style.display = isTcp ? 'none' : '';
     if (tcpControls) tcpControls.style.display = isTcp ? '' : 'none';
-    console.log(`[UI] Режим связи: ${isTcp ? 'MODBUS TCP/IP' : 'MODBUS RTU'}`);
+
+    // Останавливаем опрос перед сменой транспорта.
+    const wasPolling = appState.isPolling;
+    if (wasPolling) {
+      appState.isPolling = false;
+    }
+
+    // Закрываем старое соединение (какое было — COM или TCP).
+    if (currentPort.isConnected) {
+      try {
+        currentPort.release();
+      } catch (err) {
+        console.warn('[UI] Ошибка закрытия порта при смене BUS:', err);
+      }
+    }
+
+    if (isTcp) {
+      // ─── Переключение на TCP ────────────────────────────────────────────
+      const { host, port } = getTcpEndpoint();
+      const tcpPort = new TauriTcpPort(host, port);
+      attachDisconnectHandler(tcpPort, true);
+      serialManager.init(tcpPort);
+      currentPort = tcpPort;
+      (window as unknown as { serialPort?: ISerialPort }).serialPort = tcpPort;
+      // Соединение пока не открыто — ждём нажатия кнопки tcpConnectBtn.
+      updateTcpButtonState('0');
+      console.log(`[UI] Режим связи: MODBUS TCP/IP (${host}:${port}) — нажмите кнопку для подключения`);
+    } else {
+      // ─── Переключение на RTU ────────────────────────────────────────────
+      // Создаём свежий TauriSerialPort: старый мог быть закрыт при
+      // переключении на TCP. Путь к COM-порту берём из comSelect.
+      const comSelect = document.getElementById('comSelect') as HTMLSelectElement | null;
+      const path = comSelect?.value && comSelect.value !== '—' ? comSelect.value : '';
+      const baudRate = baudSelect ? parseInt(baudSelect.value, 10) || 115200 : 115200;
+      const serialPort = new TauriSerialPort(path, baudRate);
+      attachDisconnectHandler(serialPort, false);
+      serialManager.init(serialPort);
+      currentPort = serialPort;
+      (window as unknown as { serialPort?: ISerialPort }).serialPort = serialPort;
+      updateTcpButtonState('0');
+      console.log('[UI] Режим связи: MODBUS RTU');
+    }
+
+    // Если до переключения шёл опрос — перезапускаем его на новом транспорте.
+    // Небольшая задержка, чтобы текущий readLoop успел выйти из while
+    // (isPolling = false) и в своём finally сбросил isLoopRunning.
+    if (wasPolling) {
+      setTimeout(() => {
+        appState.isPolling = true;
+        void readLoop(currentPort, parser, view, buffers, appState);
+      }, 150);
+    }
   };
 
   if (busSelect) {
@@ -77,7 +197,62 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
     applyBusMode(); // Применяем текущий режим при старте
   }
 
-  // --- Кнопка адреса Modbus ---
+  // ─── Кнопка подключения/отключения TCP ─────────────────────────────────
+  tcpConnectBtn?.addEventListener('click', async () => {
+    // Работаем только если сейчас TCP-режим.
+    if (busSelect?.value !== 'TCP') return;
+
+    if (currentPort.isConnected) {
+      // Уже подключены — отключаемся.
+      try {
+        // Останавливаем опрос перед закрытием соединения.
+        appState.isPolling = false;
+        currentPort.release();
+      } catch (err) {
+        console.error('[UI] Ошибка отключения TCP:', err);
+      }
+      updateTcpButtonState('0');
+      console.log('[UI] TCP-соединение закрыто');
+      return;
+    }
+
+    // Пробуем подключиться.
+    if (currentPort instanceof TauriTcpPort) {
+      const { host, port } = getTcpEndpoint();
+      currentPort.setEndpoint(host, port);
+    }
+    try {
+      await currentPort.connect();
+      updateTcpButtonState('1');
+      console.log('[UI] TCP-соединение установлено');
+
+      // ─── Запуск опроса после успешного подключения ─────────────────────
+      // Логика зеркалит restoreConnection из uiManager.ts: показываем
+      // статус в осциллографе и запускаем readLoop, если он виден.
+      // Отличие — используем currentPort (актуальный TCP-порт), а не
+      // serial из deps, который относится к исходному COM-порту.
+      const osc = window.osc;
+      if (osc && typeof osc.setConnectionStatus === 'function') {
+        osc.setConnectionStatus(true);
+      }
+      const oscContainerEl = document.getElementById('osc-container');
+      const isOscVisible = oscContainerEl &&
+        !oscContainerEl.classList.contains('hidden') &&
+        oscContainerEl.style.display !== 'none';
+      if (isOscVisible) {
+        console.log('[UI] Запуск readLoop после подключения по TCP');
+        appState.isLoopRunning = false;
+        appState.isPolling = true;
+        void readLoop(currentPort, parser, view, buffers, appState);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[UI] Ошибка подключения TCP:', msg);
+      updateTcpButtonState('E');
+    }
+  });
+
+  // ─── Кнопка адреса Modbus ──────────────────────────────────────────────
   if (addrBtn) {
     const updateAddrLabel = (): void => {
       addrBtn.textContent = 'Адрес: x' + appState.slaveAddress.toString(16).toUpperCase().padStart(2, '0');
@@ -92,7 +267,6 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
         updateAddrLabel();
         console.log(`[UI] Адрес Modbus изменён на ${newAddr} (0x${newAddr.toString(16).toUpperCase().padStart(2, '0')})`);
         
-        // Уведомляем осциллограф о смене адреса
         const osc = window.osc;
         if (osc && typeof osc.setSlaveAddress === 'function') {
           osc.setSlaveAddress(newAddr);
@@ -102,7 +276,7 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
     });
   }
 
-  // --- Глобальные обработчики событий бизнес-логики ---
+  // ─── Глобальные обработчики событий бизнес-логики ──────────────────────
 
   // Событие: Контроллер перестал отвечать (серия таймаутов)
   window.addEventListener('app:controller-not-responding', (e: Event) => {
@@ -110,10 +284,8 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
     const count = detail?.consecutiveTimeouts ?? 0;
     console.log(`[UI] Получено событие "контроллер не отвечает" (подряд ошибок: ${count})`);
 
-    // Показываем компактное окно
     showCompactError('Контроллер не отвечает. Проверьте адрес и подключение.', 3000);
 
-    // Если осциллограф открыт — замораживаем его рендер
     const osc = window.osc;
     if (osc && typeof (osc as any).showFrozenState === 'function') {
       (osc as any).showFrozenState('');
@@ -129,35 +301,26 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
     }
   });
 
-  // Событие: Запрос на перезапуск опроса после записи в контроллер
+  // Событие: Запрос на перезапуск опроса после записи в контроллер.
+  // ВАЖНО: используем currentPort, а не deps.serial — иначе после
+  // переключения BUS перезапуск шёл бы на старом транспорте.
   window.addEventListener('app:request-polling-restart', () => {
-    if (serial && serial.isConnected && appState.isPolling && !appState.isLoopRunning) {
+    if (currentPort && currentPort.isConnected && appState.isPolling && !appState.isLoopRunning) {
       console.log('[UI] Перезапуск readLoop по запросу после записи...');
       appState.isLoopRunning = false;
-      // Вызываем переданную функцию readLoop
-      void readLoop(serial, parser, view, buffers, appState);
+      void readLoop(currentPort, parser, view, buffers, appState);
     }
   });
 
   // Защита от закрытия вкладки при несохранённых изменениях
   window.addEventListener('beforeunload', (e: BeforeUnloadEvent) => {
     if (hasAnyDirty()) {
-      // По современному стандарту для запроса подтверждения выхода достаточно
-      // отменить событие через preventDefault() — именно отмена события заставляет
-      // браузер/веб-вью показать диалог «Покинуть страницу?».
-      // Устаревшее свойство returnValue (легаси-алиас из старых браузеров)
-      // больше НЕ используется: оно помечено @deprecated в lib.dom.d.ts и
-      // давало предупреждение TS6385 в редакторе.
       e.preventDefault();
     }
 
-    // Закрываем COM-порт при выходе из приложения (вызывает close_serial_port на Rust-стороне).
-    // ВАЖНО: используем интерфейс ISerialPort (контракт порта), а не конкретный класс
-    // TauriSerialPort, по двум причинам:
-    //   1) метод release() объявлен именно в контракте ISerialPort (строка 50 ISerialPort.ts),
-    //      то есть доступен любой реализации порта (браузерной и нативной);
-    //   2) тип ISerialPort в этом файле УЖЕ импортирован (первая строка импортов),
-    //      а TauriSerialPort — нет, из-за чего и возникала ошибка TS2552.
+    // Закрываем текущее соединение при выходе из приложения.
+    // Берём window.serialPort — там всегда актуальный порт (COM или TCP),
+    // потому что applyBusMode обновляет эту ссылку при смене BUS.
     const serialPort = (window as unknown as { serialPort?: ISerialPort }).serialPort;
     if (serialPort) {
       try {
@@ -168,5 +331,5 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
     }
   });
 
-  console.log("[CommunicationSettingsUI] Инициализирован.");
+  console.log('[CommunicationSettingsUI] Инициализирован.');
 }
