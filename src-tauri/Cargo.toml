@@ -28,6 +28,7 @@ tauri-plugin-fs = "2.6.0"
 tauri-plugin-process = "2"
 # Библиотека для работы с последовательными портами (кроссплатформенная)
 serialport = "4.3"
+socket2 = { version = "0.5", features = ["all"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

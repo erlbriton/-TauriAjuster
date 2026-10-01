@@ -16,6 +16,8 @@ use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::{Duration, Instant};
 
+use socket2::{Socket, TcpKeepalive};
+
 use crate::state::TcpState;
 
 /// Команда: открыть TCP-соединение с указанным host:port.
@@ -47,8 +49,8 @@ pub fn open_tcp_connection(
         .to_socket_addrs()
         .map_err(|e| format!("Не удалось разрешить адрес {}: {}", address, e))?;
 
-    // connect_timeout — 3 секунды. Без него Linux ждёт OS-дефолт (~2 мин),
-    // из-за чего UI зависал на длительное время при недоступном адресе.
+    // connect_timeout — 3 секунды. Без него ОС ждёт дефолт (до 2 минут),
+    // из-за чего UI зависал при недоступном адресе.
     const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 
     let mut stream_opt: Option<TcpStream> = None;
@@ -84,6 +86,32 @@ pub fn open_tcp_connection(
     stream
         .set_nodelay(true)
         .map_err(|e| format!("Не удалось задать TCP_NODELAY: {}", e))?;
+
+    // TCP keepalive — критично для детекции обрыва кабеля.
+    //
+    // На Windows дефолт такой:
+    //   - KeepAliveTime = 2 часа (простой до первой пробы);
+    //   - KeepAliveInterval = 1 сек (между пробами);
+    //   - число проб = 10.
+    // То есть ОС заметит обрыв через ~2 часа. Именно поэтому без keepalive
+    // приложение ждало 3-4 минуты, пока ядро само сбросит мёртвый сокет.
+    //
+    // Настраиваем агрессивно:
+    //   - простой 5 сек → первая проба;
+    //   - интервал 2 сек между пробами;
+    //   - 3 пробы — итого детекция за ~11 сек.
+    //
+    // socket2::Socket::from забирает ownership у TcpStream, потом возвращаем
+    // обратно через .into(). Иначе fd будет закрыт дважды.
+    let socket = Socket::from(stream);
+    let keepalive = TcpKeepalive::new()
+        .with_time(Duration::from_secs(5))
+        .with_interval(Duration::from_secs(2))
+        .with_retries(3);
+    socket
+        .set_tcp_keepalive(&keepalive)
+        .map_err(|e| format!("Не удалось задать TCP keepalive: {}", e))?;
+    let stream: TcpStream = socket.into();
 
     let mut guard = state.stream.lock().map_err(|e| e.to_string())?;
     *guard = Some(stream);
@@ -136,9 +164,13 @@ pub fn tcp_transaction(
                 last_byte_at = Some(Instant::now());
             }
             Ok(_) => {
-                // 0 байт — соединение закрыто удалённой стороной.
-                // Для Modbus это означает обрыв; прекращаем чтение.
-                break;
+                // read() вернул 0 — удалённая сторона закрыла соединение
+                // (RST или FIN). Это фатально: сокет мёртв, нужно
+                // переподключение. Возвращаем ошибку, чтобы SerialManager
+                // вызвал notifyDisconnect и UI переключил кнопку в 'E'.
+                eprintln!("[RUST] tcp_transaction: соединение закрыто удалённой стороной");
+                *guard = None;
+                return Err("Соединение закрыто удалённой стороной".to_string());
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut
                 || e.kind() == std::io::ErrorKind::WouldBlock => {
