@@ -66,6 +66,14 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
   // (readLoop, запись в контроллер, командная строка) идут через новый порт.
   let currentPort: ISerialPort = serial;
 
+  // Флаг первого вызова applyBusMode: при старте НЕ пересоздаём порт.
+  // Иначе получится рассинхронизация: serialManager будет смотреть на
+  // новый (закрытый) объект, а main.ts/device-management продолжат
+  // работать с исходным. Ровно это и приводило к тому, что currentPort
+  // в обработчике app:request-polling-restart показывал isConnected=false,
+  // хотя реальные транзакции шли успешно через другой объект.
+  let isFirstApplyBusMode = true;
+
   // ─── Ссылки на элементы UI ─────────────────────────────────────────────
   const tcpIpInput = document.getElementById('tcpIpInput') as HTMLInputElement | null;
   const tcpPortInput = document.getElementById('tcpPortInput') as HTMLInputElement | null;
@@ -139,6 +147,16 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
     if (rtuControls) rtuControls.style.display = isTcp ? 'none' : '';
     if (tcpControls) tcpControls.style.display = isTcp ? '' : 'none';
 
+    // При старте приложения не трогаем порт: serialManager.serial уже
+    // указывает на порт из main.ts, который подключён через
+    // executeDeviceConnection. Пересоздание здесь привело бы к тому, что
+    // serialManager смотрел бы на новый (закрытый) объект.
+    if (isFirstApplyBusMode) {
+      isFirstApplyBusMode = false;
+      console.log('[UI] Начальный режим связи применён (порт не пересоздаётся)');
+      return;
+    }
+
     // Останавливаем опрос перед сменой транспорта.
     const wasPolling = appState.isPolling;
     if (wasPolling) {
@@ -202,12 +220,16 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
     // Работаем только если сейчас TCP-режим.
     if (busSelect?.value !== 'TCP') return;
 
-    if (currentPort.isConnected) {
+    // Актуальный порт — из serialManager (см. комментарий в applyBusMode).
+    const port = serialManager.serial;
+    if (!port) return;
+
+    if (port.isConnected) {
       // Уже подключены — отключаемся.
       try {
         // Останавливаем опрос перед закрытием соединения.
         appState.isPolling = false;
-        currentPort.release();
+        port.release();
       } catch (err) {
         console.error('[UI] Ошибка отключения TCP:', err);
       }
@@ -217,12 +239,12 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
     }
 
     // Пробуем подключиться.
-    if (currentPort instanceof TauriTcpPort) {
-      const { host, port } = getTcpEndpoint();
-      currentPort.setEndpoint(host, port);
+    if (port instanceof TauriTcpPort) {
+      const { host, port: tcpPortNum } = getTcpEndpoint();
+      port.setEndpoint(host, tcpPortNum);
     }
     try {
-      await currentPort.connect();
+      await port.connect();
       updateTcpButtonState('1');
       console.log('[UI] TCP-соединение установлено');
 
@@ -243,7 +265,7 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
         console.log('[UI] Запуск readLoop после подключения по TCP');
         appState.isLoopRunning = false;
         appState.isPolling = true;
-        void readLoop(currentPort, parser, view, buffers, appState);
+        void readLoop(port, parser, view, buffers, appState);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -305,10 +327,27 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
   // ВАЖНО: используем currentPort, а не deps.serial — иначе после
   // переключения BUS перезапуск шёл бы на старом транспорте.
   window.addEventListener('app:request-polling-restart', () => {
-    if (currentPort && currentPort.isConnected && appState.isPolling && !appState.isLoopRunning) {
+    // Берём порт из serialManager, а не из currentPort.
+    // serialManager.serial — это всегда тот объект, через который шли
+    // последние успешные транзакции. currentPort может устареть, если
+    // пользователь подключался по COM через executeDeviceConnection,
+    // которая внутри вызывает serialManager.init(serial) со СВОИМ serial.
+    const port = serialManager.serial;
+    console.log(
+      '[UI] Получено app:request-polling-restart',
+      {
+        hasPort: !!port,
+        isConnected: port?.isConnected,
+        isPolling: appState.isPolling,
+        isLoopRunning: appState.isLoopRunning,
+      },
+    );
+    if (port && port.isConnected && appState.isPolling && !appState.isLoopRunning) {
       console.log('[UI] Перезапуск readLoop по запросу после записи...');
       appState.isLoopRunning = false;
-      void readLoop(currentPort, parser, view, buffers, appState);
+      void readLoop(port, parser, view, buffers, appState);
+    } else {
+      console.warn('[UI] Условие перезапуска не выполнено');
     }
   });
 

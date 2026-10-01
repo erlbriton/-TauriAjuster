@@ -10,6 +10,7 @@ import { parseDeviceIdString } from '../core/report-data.js';
 import { getAllDevices, deviceRegistry, removeDeviceFromRegistry } from '../ini-manager/tree-core.js';
 import { getFileStore } from '../ini-manager/file-loader.js';
 import { encodeToWindows1251 } from '../core/encoding.js';
+import { decodeTextBuffer } from '../ini-manager/textFileReader.js';
 import { showIdModal } from './ui.js';
 import { writeFile } from '@tauri-apps/plugin-fs';
 
@@ -217,13 +218,44 @@ async function handleBackupApply(): Promise<void> {
     const dev = templateDev.iniConfig.device;
     const devId = dev ? dev.id : '';
 
-    // Ищем контент шаблона в хранилище: сначала по ключу, затем перебором по ID в [DEVICE]
+    // Ищем запись шаблона в хранилище: сначала по ключу, затем перебором по ID в [DEVICE]
     const store = getFileStore();
     let entry = store.get(`${dev?.location ?? ''}::${devId}`);
     if (!entry?.content) entry = findStoreEntryByDeviceId(devId);
     if (!entry || !entry.content) {
         showIdModal('Файл шаблона не найден в хранилище.');
         return;
+    }
+
+    // ─── Читаем ПОЛНЫЙ текст шаблона с диска ────────────────────────────────
+    // ВАЖНО: в fileStore.content может лежать только header (первые 5 строк
+    // [DEVICE]) — так работает быстрая автозагрузка при старте приложения
+    // (см. header-loader.ts: registerDeviceFromHeader). Полный текст
+    // появляется в fileStore только после клика по устройству в дереве.
+    //
+    // При создании нового файла нам нужен ПОЛНЫЙ шаблон — со всеми секциями
+    // [RAM], [XRAM], [CD], [FLASH], [VARS]. Поэтому читаем файл целиком
+    // с диска по entry.path через Rust-команду read_ini_file.
+    let templateContent = entry.content;
+    if (entry.path) {
+        try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            const raw = await invoke<Uint8Array | number[]>('read_ini_file', { path: entry.path });
+            const bytes = raw instanceof Uint8Array ? raw : Uint8Array.from(raw);
+            templateContent = decodeTextBuffer(bytes.buffer as ArrayBuffer);
+            console.log(
+                `[backup] Шаблон прочитан с диска: ${templateContent.length} символов, ` +
+                `${templateContent.split(/\r?\n/).length} строк`,
+            );
+        } catch (err) {
+            console.warn(
+                '[backup] Не удалось прочитать полный шаблон с диска — ' +
+                'используем кэш из fileStore (может содержать только header):',
+                err,
+            );
+            // Fallback: работаем с тем, что есть в кэше. Это гарантирует,
+            // что операция не сорвётся, даже если файла на диске нет.
+        }
     }
 
     const bannerId = (document.querySelector('.id-banner span')?.textContent ?? '').trim();
@@ -243,7 +275,7 @@ async function handleBackupApply(): Promise<void> {
     const callerLoc = (document.getElementById(currentSource.locInputId) as HTMLInputElement | null)?.value.trim() ?? '';
 
     // ID= в новом файле — полная строка подключённого контроллера
-    const content = buildBackupContent(entry.content, bannerId, useLocation, useMech, callerLoc, callerMech);
+    const content = buildBackupContent(templateContent, bannerId, useLocation, useMech, callerLoc, callerMech);
     const newIdValue = bannerId;
 
     // ─── Ищем «старый» файл: тот же serial + deviceType, что у подключённого. ─

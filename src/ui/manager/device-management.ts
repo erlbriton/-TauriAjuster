@@ -162,6 +162,16 @@ export function initDeviceManagementUI(deps: DeviceManagementUIDeps): void {
             (details as HTMLDetailsElement).open = true;
           }
           leaf.click();
+
+          // Прокручиваем дерево так, чтобы найденный узел оказался в зоне
+          // видимости. Делаем это через requestAnimationFrame, чтобы дождаться
+          // перерисовки DOM после раскрытия details и клика: если прокрутить
+          // сразу, браузер ещё не успел пересчитать высоту раскрытого списка,
+          // и scrollIntoView попадёт в неправильное место.
+          requestAnimationFrame(() => {
+            leaf.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          });
+
           console.log(`[Connect] Родной INI найден и выбран: ${matchedId}`);
         } else {
           console.warn(`[Connect] Родной INI найден (${matchedId}), но узел дерева не отрендерен.`);

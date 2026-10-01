@@ -284,19 +284,55 @@ export async function copyBaseToController(): Promise<void> {
         }
     }
 
-    // КРИТИЧНО: если фоновый опрос был активен до копирования — за время
-    // записи цикл readLoop() вышел из while (isPolling был false) и в своём
-    // finally выставил isLoopRunning = false. Возврат isPolling = true сам
-    // по себе цикл НЕ возобновляет — нужно явно попросить UI перезапустить
-    // опрос. Без этого осциллограф замирает: маркеры идут (PixiJS рисует
-    // последний буфер), а данные не обновляются. Кнопка «Обновить» —
-    // единственный способ оживить опрос до этого фикса.
+    // КРИТИЧНО: перед диспатчем события request-polling-restart нужно
+    // дождаться, когда старый readLoop полностью завершится и сбросит
+    // isLoopRunning = false.
     //
-    // Тот же механизм уже используется в controller-write.ts после
-    // одиночной записи ячейки — здесь подключаем его для массового
-    // копирования База → Контроллер.
+    // Почему: мы поставили isPolling = false и подождали всего 50 мс
+    // (см. блок выше). Если в этот момент readLoop находился внутри
+    // транзакции (await executeTransaction, до 500 мс на строку), он
+    // выйдет из while только после её завершения. К моменту диспатча
+    // события флаг isLoopRunning ещё true — и обработчик в
+    // communication-settings.ts (проверяющий !isLoopRunning) откажется
+    // перезапускать цикл. Графики замрут до следующего ручного клика
+    // по «Обновить».
+    //
+    // Тот же механизм используется в controller-write.ts для одиночной
+    // записи — там он работает, потому что запись быстрая (одна строка),
+    // и readLoop успевает завершиться за отведённые 50 мс. При массовом
+    // копировании пачка транзакций длится секунды — нужен явный wait.
     if (wasPolling) {
-        window.dispatchEvent(new CustomEvent('app:request-polling-restart'));
+        // isLoopRunning живёт в AppState, а не в TableEditorState.
+        // stateObj здесь имеет тип TableEditorState (получен через
+        // getTableEditorState()), в нём этого поля нет. Берём AppState
+        // из window — он публикуется в main.ts и содержит isLoopRunning.
+        const appStateRef = (window as unknown as {
+            appState?: { isLoopRunning?: boolean };
+        }).appState;
+
+        const waitForLoopStop = async (): Promise<void> => {
+            const MAX_WAIT_MS = 2000;
+            const STEP_MS = 50;
+            let waited = 0;
+            while (appStateRef?.isLoopRunning && waited < MAX_WAIT_MS) {
+                await new Promise((r) => setTimeout(r, STEP_MS));
+                waited += STEP_MS;
+            }
+            if (appStateRef?.isLoopRunning) {
+                console.warn(
+                    '[BASE→CONTROLLER] readLoop не завершился за 2 сек — ' +
+                    'перезапуск может не сработать',
+                );
+            }
+        };
+        void waitForLoopStop().then(() => {
+            console.log(
+                '[BASE→CONTROLLER] Диспатчу app:request-polling-restart, ' +
+                'isLoopRunning =',
+                appStateRef?.isLoopRunning,
+            );
+            window.dispatchEvent(new CustomEvent('app:request-polling-restart'));
+        });
     }
 
     if (failed.length === 0) {
