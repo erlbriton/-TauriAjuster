@@ -53,6 +53,15 @@ export async function readLoop(serial: ISerialPort, _parser: unknown, view: IOsc
     let errorEventSent = false;
     const TIMEOUT_THRESHOLD = 3;
 
+    // Экспоненциальный backoff при таймаутах: если контроллер не отвечает,
+    // увеличиваем паузу между итерациями. Без этого мы «флудим» 50 запросами
+    // в секунду, что на многих промышленных устройствах включает временную
+    // блокировку Modbus (TCP принимается, а запросы игнорируются).
+    // Сбрасывается в 0 при первом же успешном ответе.
+    let backoffMs = 0;
+    const BACKOFF_STEP = 500;
+    const BACKOFF_MAX = 5000;
+
     try {
         while (serial && serial.isConnected && stateObj.isPolling) {
             // Явная проверка на случай, если флаг изменился во время await
@@ -72,12 +81,18 @@ export async function readLoop(serial: ISerialPort, _parser: unknown, view: IOsc
             
             const iniConfig: IniConfig | null = stateObj.currentIniConfig;
             if (!iniConfig || !iniConfig.isValid) {
+                console.log('[readLoop] итерация: iniConfig пуст или невалиден — ждём 500 мс');
                 await new Promise(r => setTimeout(r, 500));
                 continue;
             }
             // 1. Формируем оптимальные батчи запросов Modbus
             //    по регистрам текущей секции (RAM или XRAM).
             const batches = getOptimizedBatches(iniConfig, sectionMode, 10, 125);
+            console.log(
+                `[readLoop] итерация: section=${sectionMode}, ` +
+                `sections=[${iniConfig.sectionNames.join(',')}], ` +
+                `batches=${batches.length}`,
+            );
             if (batches.length === 0) {
                 await new Promise(r => setTimeout(r, 500));
                 continue;
@@ -125,6 +140,21 @@ export async function readLoop(serial: ISerialPort, _parser: unknown, view: IOsc
                     }
                 } catch (err) {
                     console.error(`Read error for batch start ${startAddr}:`, err);
+
+                    // RST от контроллера (os error 10054, "принудительно разорвал")
+                    // — это не таймаут, а активный разрыв. Немедленно выходим из
+                    // цикла батчей, чтобы не «долбить» мёртвый сокет.
+                    const msg = err instanceof Error ? err.message : String(err);
+                    const isReset = msg.includes('10054') || msg.includes('разорвано') || msg.includes('разорвал');
+                    if (isReset) {
+                        consecutiveTimeouts = TIMEOUT_THRESHOLD;
+                        errorEventSent = true;
+                        window.dispatchEvent(new CustomEvent('app:controller-not-responding', {
+                            detail: { consecutiveTimeouts, reason: 'reset' },
+                        }));
+                        break;
+                    }
+
                     consecutiveTimeouts++;
                 }
             }
@@ -237,7 +267,16 @@ export async function readLoop(serial: ISerialPort, _parser: unknown, view: IOsc
                     });
                 }
             }
-            await new Promise((res) => setTimeout(res, stateObj.pollDelayMs ?? 20));
+            // Пересчитываем backoff по итогам итерации.
+            // mergedDataMap.size > 0 — значит был хотя бы один успешный батч.
+            if (mergedDataMap.size > 0) {
+                backoffMs = 0;
+            } else {
+                backoffMs = Math.min(backoffMs + BACKOFF_STEP, BACKOFF_MAX);
+            }
+
+            const delay = (stateObj.pollDelayMs ?? 20) + backoffMs;
+            await new Promise((res) => setTimeout(res, delay));
         }
     } finally {
         stateObj.isLoopRunning = false;

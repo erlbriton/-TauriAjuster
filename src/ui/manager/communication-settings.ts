@@ -74,6 +74,13 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
   // хотя реальные транзакции шли успешно через другой объект.
   let isFirstApplyBusMode = true;
 
+  // ─── Авто-реконнект ────────────────────────────────────────────────────
+  // ID таймера следующей попытки переподключения (null — цикл не запущен).
+  // Отменяется при ручном клике по кнопке или при смене BUS.
+  let autoReconnectTimerId: ReturnType<typeof setTimeout> | null = null;
+  // Номер текущей попытки (для экспоненциальной задержки).
+  let autoReconnectAttempt = 0;
+
   // ─── Ссылки на элементы UI ─────────────────────────────────────────────
   const tcpIpInput = document.getElementById('tcpIpInput') as HTMLInputElement | null;
   const tcpPortInput = document.getElementById('tcpPortInput') as HTMLInputElement | null;
@@ -120,11 +127,94 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
    *   - RTU: визуального индикатора нет, но readLoop сам остановится,
    *     потому что проверяет serial.isConnected на каждой итерации.
    */
+  /**
+   * Отменяет запланированный авто-реконнект (если есть).
+   * Вызывается при ручном клике по кнопке и при смене BUS.
+   */
+  const cancelAutoReconnect = (): void => {
+    if (autoReconnectTimerId !== null) {
+      clearTimeout(autoReconnectTimerId);
+      autoReconnectTimerId = null;
+      console.log('[UI] Авто-реконнект отменён');
+    }
+    autoReconnectAttempt = 0;
+  };
+
+  /**
+   * Планирует следующую попытку переподключения к TCP-контроллеру.
+   * Задержки: 3, 6, 12, 24, 30, 30, ... сек.
+   * Цикл останавливается при успехе, ручном клике или смене BUS.
+   */
+  const scheduleAutoReconnect = (): void => {
+    // Только если сейчас TCP-режим и приложение не закрывается.
+    if (busSelect?.value !== 'TCP') return;
+
+    autoReconnectAttempt++;
+    const delayMs = Math.min(
+      3000 * Math.pow(2, autoReconnectAttempt - 1),
+      30000,
+    );
+    console.log(
+      `[UI] Авто-реконнект: попытка №${autoReconnectAttempt} через ${delayMs} мс`,
+    );
+
+    autoReconnectTimerId = setTimeout(async () => {
+      autoReconnectTimerId = null;
+
+      // Проверяем условия ещё раз: за время ожидания пользователь мог
+      // сменить BUS, закрыть приложение или вручную подключиться.
+      if (busSelect?.value !== 'TCP') return;
+      const port = serialManager.serial;
+      if (!port || port.isConnected) return;
+
+      // Пробуем подключиться.
+      if (port instanceof TauriTcpPort) {
+        const { host, port: tcpPortNum } = getTcpEndpoint();
+        port.setEndpoint(host, tcpPortNum);
+      }
+
+      try {
+        await port.connect();
+        updateTcpButtonState('1');
+        console.log(`[UI] Авто-реконнект: успех с попытки №${autoReconnectAttempt}`);
+        autoReconnectAttempt = 0;
+
+        // Запускаем readLoop, если осциллограф виден.
+        const osc = window.osc;
+        if (osc && typeof osc.setConnectionStatus === 'function') {
+          osc.setConnectionStatus(true);
+        }
+        const oscContainerEl = document.getElementById('osc-container');
+        const isOscVisible = oscContainerEl &&
+          !oscContainerEl.classList.contains('hidden') &&
+          oscContainerEl.style.display !== 'none';
+        if (isOscVisible) {
+          appState.isLoopRunning = false;
+          appState.isPolling = true;
+          void readLoop(port, parser, view, buffers, appState);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[UI] Авто-реконнект: попытка №${autoReconnectAttempt} провалилась: ${msg}`);
+        updateTcpButtonState('E');
+        // Планируем следующую попытку.
+        scheduleAutoReconnect();
+      }
+    }, delayMs);
+  };
+
   const attachDisconnectHandler = (port: ISerialPort, isTcpMode: boolean): void => {
     port.onDisconnect(() => {
       console.log(`[UI] Обрыв соединения (${isTcpMode ? 'TCP' : 'RTU'})`);
+
+      // Останавливаем опрос — readLoop проверяет serial.isConnected
+      // на каждой итерации, а порт уже выставил isConnected = false.
+      appState.isPolling = false;
+
       if (isTcpMode) {
         updateTcpButtonState('E');
+        // Запускаем авто-восстановление — без кликов пользователя.
+        scheduleAutoReconnect();
       }
     });
   };
@@ -142,7 +232,7 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
   }
 
   // ─── Переключение BUS: MODBUS RTU <-> MODBUS TCP/IP ────────────────────
-  const applyBusMode = (): void => {
+  const applyBusMode = async (): Promise<void> => {
     const isTcp = busSelect?.value === 'TCP';
     if (rtuControls) rtuControls.style.display = isTcp ? 'none' : '';
     if (tcpControls) tcpControls.style.display = isTcp ? '' : 'none';
@@ -157,6 +247,9 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
       return;
     }
 
+    // Отменяем запланированный авто-реконнект — пользователь сам меняет режим.
+    cancelAutoReconnect();
+
     // Останавливаем опрос перед сменой транспорта.
     const wasPolling = appState.isPolling;
     if (wasPolling) {
@@ -164,12 +257,17 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
     }
 
     // Закрываем старое соединение (какое было — COM или TCP).
+    // При смене BUS особенно важно закрыть TCP через release() —
+    // это отправит FIN контроллеру, и он освободит свой сокет.
     if (currentPort.isConnected) {
       try {
         currentPort.release();
       } catch (err) {
         console.warn('[UI] Ошибка закрытия порта при смене BUS:', err);
       }
+      // Пауза после close: даём контроллеру время освободить сокет,
+      // прежде чем открывать новое соединение.
+      await new Promise((r) => setTimeout(r, 800));
     }
 
     if (isTcp) {
@@ -211,14 +309,20 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
   };
 
   if (busSelect) {
-    busSelect.addEventListener('change', applyBusMode);
-    applyBusMode(); // Применяем текущий режим при старте
+    busSelect.addEventListener('change', () => {
+      void applyBusMode();
+    });
+    void applyBusMode(); // Применяем текущий режим при старте
   }
 
   // ─── Кнопка подключения/отключения TCP ─────────────────────────────────
   tcpConnectBtn?.addEventListener('click', async () => {
     // Работаем только если сейчас TCP-режим.
     if (busSelect?.value !== 'TCP') return;
+
+    // Ручной клик — отменяем запланированный авто-реконнект.
+    // Пользователь сам решает, что делать.
+    cancelAutoReconnect();
 
     // Актуальный порт — из serialManager (см. комментарий в applyBusMode).
     const port = serialManager.serial;
@@ -235,6 +339,20 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
       }
       updateTcpButtonState('0');
       console.log('[UI] TCP-соединение закрыто');
+
+      // Останавливаем рендер осциллографа: маркеры (курсоры) и графики
+      // должны замереть вместе с потерей связи. Тот же метод, что
+      // вызывается при обрыве кабеля (см. обработчик
+      // app:controller-not-responding).
+      const osc = window.osc;
+      if (osc) {
+        if (typeof (osc as any).showFrozenState === 'function') {
+          (osc as any).showFrozenState('');
+        }
+        if (typeof osc.setConnectionStatus === 'function') {
+          osc.setConnectionStatus(false);
+        }
+      }
       return;
     }
 
@@ -243,7 +361,18 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
       const { host, port: tcpPortNum } = getTcpEndpoint();
       port.setEndpoint(host, tcpPortNum);
     }
+    // Блокируем кнопку на время попытки, чтобы не было параллельных connect.
+    const btn = tcpConnectBtn;
+    if (btn) btn.disabled = true;
+
     try {
+      // Пауза 1 сек перед коннектом: если предыдущее соединение только что
+      // закрыто, контроллер может ещё не освободить свой сокет (TIME_WAIT).
+      // Без паузы SYN уходит в пустоту, и мы получаем connection timed out.
+      // 1 сек — минимальная безопасная задержка. Контроллеры обычно
+      // освобождают сокет за 500–700 мс.
+      await new Promise((r) => setTimeout(r, 1000));
+
       await port.connect();
       updateTcpButtonState('1');
       console.log('[UI] TCP-соединение установлено');
@@ -271,6 +400,8 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[UI] Ошибка подключения TCP:', msg);
       updateTcpButtonState('E');
+    } finally {
+      if (btn) btn.disabled = false;
     }
   });
 

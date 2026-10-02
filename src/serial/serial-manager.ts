@@ -55,11 +55,37 @@ export class SerialManager {
      * за timeoutMs; непустой — значит пришли байты как есть (включая мусор).
      * При фатальной ошибке транспорта — бросает исключение.
      */
-    private async _transaction(packet: Uint8Array, timeoutMs: number): Promise<Uint8Array> {
+        private async _transaction(packet: Uint8Array, timeoutMs: number): Promise<Uint8Array> {
+        // ─── Взятие блокировки с таймаутом ──────────────────────────────
+        // this.lock — цепочка промисов: каждая новая транзакция ждёт
+        // завершения предыдущей. Если предыдущая подвисла (например, её
+        // invoke не разрешился после обрыва сокета), новая транзакция
+        // ждала бы её вечно — именно это и приводило к «графики стоят,
+        // isLoopRunning: true навсегда».
+        //
+        // Теперь ждём не дольше LOCK_TIMEOUT_MS. Если предыдущая транзакция
+        // не отпустила lock за это время — считаем её подвисшей и
+        // продолжаем без неё.
+        const LOCK_TIMEOUT_MS = 5000;
         const oldLock = this.lock;
         let release: () => void = () => { };
         this.lock = new Promise((r) => { release = r; });
-        await oldLock;
+
+        const lockWaitPromise = oldLock.then(() => 'ok' as const);
+        const lockTimeoutPromise = new Promise<'timeout'>((r) =>
+            setTimeout(() => r('timeout'), LOCK_TIMEOUT_MS),
+        );
+
+        const lockResult = await Promise.race([lockWaitPromise, lockTimeoutPromise]);
+        if (lockResult === 'timeout') {
+            console.warn(
+                `[SerialManager] Таймаут ожидания lock (${LOCK_TIMEOUT_MS} мс). ` +
+                'Предыдущая транзакция не завершилась — продолжаем без неё.',
+            );
+            // Не ждём oldLock — работаем параллельно. В худшем случае
+            // две транзакции пойдут одновременно, но лучше так, чем
+            // навсегда залипнуть.
+        }
 
         const port = this.serial;
 
@@ -71,18 +97,31 @@ export class SerialManager {
             // Выбор Rust-команды по типу транспорта:
             //  - 'tcp'    → tcp_transaction (Modbus RTU over TCP/IP, сокет);
             //  - 'serial' или undefined → serial_transaction (COM-порт).
-            // Поле transportKind объявлено в ISerialPort как необязательное,
-            // поэтому старые реализации (TauriSerialPort без этого поля)
-            // продолжают работать через serial_transaction.
             const commandName = port.transportKind === 'tcp'
                 ? 'tcp_transaction'
                 : 'serial_transaction';
 
             const dataArray = Array.from(packet);
-            const response = await invoke<number[]>(commandName, {
-                data: dataArray,
-                timeoutMs,
-            });
+
+            // Таймаут на invoke. Rust-команда сама должна уложиться в timeoutMs,
+            // но если по какой-то причине invoke не разрешается (залипший Mutex,
+            // полуоткрытый сокет, зависший драйвер), JS будет ждать вечно.
+            // Promise.race с timeoutMs + 2000 страхует от этого.
+            const invokeTimeoutMs = timeoutMs + 2000;
+            const response = await Promise.race([
+                invoke<number[]>(commandName, { data: dataArray, timeoutMs }),
+                new Promise<never>((_, reject) =>
+                    setTimeout(
+                        () =>
+                            reject(
+                                new Error(
+                                    `Таймаут invoke ${commandName} (${invokeTimeoutMs} мс)`,
+                                ),
+                            ),
+                        invokeTimeoutMs,
+                    ),
+                ),
+            ]);
 
             return new Uint8Array(response);
         } catch (err) {
