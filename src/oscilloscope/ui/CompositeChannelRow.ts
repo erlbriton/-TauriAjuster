@@ -33,7 +33,7 @@
 // ============================================================================
 
 import { Channel } from '../core/Channel';
-import { ContextMenu } from './ContextMenu';
+import { ContextMenu, type ContextMenuItem } from './ContextMenu';
 
 export class CompositeChannelRow {
     // ========================================================================
@@ -222,7 +222,7 @@ export class CompositeChannelRow {
             e.preventDefault();
             e.stopPropagation();
 
-            const menuItems: any[] = [];
+            const menuItems: ContextMenuItem[] = [];
 
             // 1. Пункт "Свойства"
             menuItems.push({

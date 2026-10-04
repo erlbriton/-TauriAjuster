@@ -8,7 +8,7 @@
 // в ChannelRow — сюда передаются только геттеры и колбэки.
 
 import type { Channel } from '../core/Channel';
-import { ContextMenu } from './ContextMenu';
+import { ContextMenu, type ContextMenuItem } from './ContextMenu';
 
 export interface ChannelRowContextMenuOptions {
   /** Канал, для которого открывается меню. */
@@ -39,7 +39,7 @@ export function showChannelRowContextMenu(opts: ChannelRowContextMenuOptions): v
   const { channel, event } = opts;
   const isAnalog = channel.type !== 'digital';
 
-  const menuItems: any[] = [
+  const menuItems: ContextMenuItem[] = [
     {
       label: 'Свойства',
       icon: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
