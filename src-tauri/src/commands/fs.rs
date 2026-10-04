@@ -58,6 +58,8 @@ pub fn open_in_default_editor(path: String) -> Result<(), String> {
         .map_err(|e| format!("Не удалось открыть файл в редакторе: {}", e))
 }
 
+use crate::app_config::AppConfigState;
+
 /// Команда: вернуть абсолютный путь к папке Records внутри текущей
 /// базовой папки (AppConfigState). Если папки нет и create == true —
 /// создаёт её. Если папки нет и create == false — возвращает специальную
@@ -66,10 +68,6 @@ pub fn open_in_default_editor(path: String) -> Result<(), String> {
 ///
 /// Рабочая папка определяется в AppConfigState (с учётом APPIMAGE на Linux
 /// и обычного exe/bin на остальных ОС).
-
-use crate::app_config::AppConfigState;
-
-/// Команда: открыть файл в редакторе по умолчанию операционной системы.
 #[tauri::command]
 pub fn ensure_records_dir(
     state: tauri::State<'_, AppConfigState>,

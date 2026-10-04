@@ -180,12 +180,9 @@ export class ChannelRow {
             // Если канал входит в текущую совмещённую группу — повторно скрываем
             // его строку. Модалка всегда передаёт visible=true, что вернуло бы
             // канал в таблицу и разрушило бы вид совмещённой строки.
-            const osc = (window as any).osc;
-            if (osc && Array.isArray(osc.compositeChannels) && osc.compositeChannels.length > 0) {
-                const isInGroup = osc.compositeChannels.some((ch: any) => ch.id === updatedChannel.id);
-                if (isInGroup) {
-                    this.setVisible(false);
-                }
+            const osc = window.osc;
+            if (osc && osc.isChannelInCompositeGroup(updatedChannel.id)) {
+                this.setVisible(false);
             }
 
             if (this.onChannelUpdated) {
@@ -193,14 +190,14 @@ export class ChannelRow {
             }
 
             // Проверка обновления высоты для совмещённой строки
-            if (osc && typeof osc.checkAndUpdateCompositeHeight === 'function') {
+            if (osc) {
                 osc.checkAndUpdateCompositeHeight(updatedChannel.id);
             }
 
             // Принудительная перерисовка для просмотрщика (viewerMode).
             // В просмотрщике отключён живой цикл, поэтому после изменения
             // высоты строки график не перерисовывается автоматически.
-            if (osc && osc.viewerMode && typeof osc.renderVisibleGraphs === 'function') {
+            if (osc && osc.viewerMode) {
                 osc.renderVisibleGraphs();
             }
         });
@@ -218,8 +215,8 @@ export class ChannelRow {
     }
 
     private runCoefficientCalculation(measuredValue: number): void {
-        const osc = (window as any).osc;
-        if (!osc || typeof osc.getArchive !== 'function') {
+        const osc = window.osc;
+        if (!osc) {
             console.error('[Коэффициент] Осциллограф недоступен');
             return;
         }

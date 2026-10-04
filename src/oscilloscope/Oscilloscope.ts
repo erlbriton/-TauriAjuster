@@ -479,6 +479,15 @@ public setAppState(state: AppState): void {
     compositeCheckHeight(this.getCompositeContext(), channelId);
   }
 
+  /**
+   * Проверяет, входит ли канал с указанным id в текущую совмещённую строку.
+   * Используется ChannelRow: после редактирования свойств канала нужно понять,
+   * скрывать ли его строку снова (если он был в совмещённой группе).
+   */
+  public isChannelInCompositeGroup(channelId: string): boolean {
+    return this.compositeChannels.some((ch) => ch.id === channelId);
+  }
+
   /** Публичная обёртка: создание совмещённой строки из выбранных каналов. */
   public createCompositeRow(channels: Channel[]): void {
     compositeCreateRow(this.getCompositeContext(), channels);

@@ -184,7 +184,7 @@ export async function initialize(osc: Oscilloscope, targetContainer?: HTMLElemen
   osc.propertiesModal = new PropertiesModal();
 
   // Делаем экземпляр осциллографа доступным глобально для доступа из UI-компонентов (модалок).
-  (window as any).osc = osc;
+  window.osc = osc;
   osc.connectionModal = new ConnectionModal();
   bindEvents(osc.getBindingsContext());
   bindTimeZoomWheel(osc.getBindingsContext(), osc.rowsContainer);

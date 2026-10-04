@@ -1,6 +1,6 @@
 // src/ui/IniPanelRenderer.ts
 
-import { IniFileItem } from './IniPanel';
+import type { IniFileItem } from './IniPanel';
 
 export class IniPanelRenderer {
     public static formatBytes(bytes: number): string {

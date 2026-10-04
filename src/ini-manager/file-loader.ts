@@ -4,7 +4,6 @@ import { showIdModal, populateDeviceForm, showCompactError, openIniEditor } from
 import { encodeToWindows1251 } from '../core/encoding.js';
 import { addDeviceToRegistry, deviceRegistry, setCurrentIniConfig, updateDeviceInRegistry, removeDeviceFromRegistry } from './tree-core.js';
 import type { RawIniConfig, DeviceRegistryItem } from './tree-core.js';
-import { renderDeviceTree } from './tree-ui.js';
 import { renderModbusTable } from '../ui/tree.js';
 import { IniParser as CoreIniParser, IniConfig, iniParamsToChannelConfigs } from '../core/ini/index.js';
 import type { AppState } from '../core/app-state.js';
@@ -38,7 +37,7 @@ interface OscIniFile {
 }
 
 // setupFileHandling больше не используется — вместо неё openIniFile с File System Access API
-
+import { renderDeviceTree } from './tree-render.js';
 export async function processSingleFileContent(
     content: string,
     fileName: string,

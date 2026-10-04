@@ -1,13 +1,13 @@
 // src/rec-viewer.ts
 // Точка входа для страницы просмотра .rec файлов (отдельная вкладка)
 
-import { RecFileReader } from './oscilloscope/core/RecFileReader.js';
-import { RecFileWriter } from './oscilloscope/core/RecFileWriter.js';
+import { RecFileReader, type RecFileData } from './oscilloscope/core/RecFileReader.js';
+import { RecFileWriter, type RecParam } from './oscilloscope/core/RecFileWriter.js';
 import { Oscilloscope } from './oscilloscope/Oscilloscope.js';
 import { Channel, ChannelConfig } from './oscilloscope/core/Channel.js';
 
 let oscilloscope: Oscilloscope | null = null;
-let currentRecData: any = null;
+let currentRecData: RecFileData | null = null;
 let currentFilename: string = '';
 
 const container = document.getElementById('rec-viewer-container') as HTMLElement;
@@ -91,7 +91,7 @@ async function saveRec(): Promise<void> {
 
     // 2. Создаем глубокую копию параметров, чтобы не мутировать исходные данные в просмотрщике
     // Мы обновим только поля scale и добавим rowHeight в объекты параметров
-    const updatedParams = currentRecData.params.map((p: any) => {
+    const updatedParams = currentRecData.params.map((p) => {
       // Ищем соответствующий живой канал по ID
       const channel = currentChannels.find((ch) => ch.id === p.id);
       
@@ -186,7 +186,7 @@ async function setupViewer(): Promise<void> {
 }
 
 // === Загрузка данных .rec в уже созданный осциллограф ===
-async function loadRecData(recData: any, fileBytes: Uint8Array): Promise<void> {
+async function loadRecData(recData: RecFileData, fileBytes: Uint8Array): Promise<void> {
   if (!oscilloscope) return;
 
   const PALETTE = [
@@ -199,7 +199,7 @@ async function loadRecData(recData: any, fileBytes: Uint8Array): Promise<void> {
   // 1. Парсим настройки вида из файла
   const viewOptions = parseViewOptionsFromText(fileBytes);
 
-  const channels: Channel[] = recData.params.map((p: any) => {
+  const channels: Channel[] = recData.params.map((p: RecParam) => {
     const isBit = p.recType === 'TBit';
     
     // Алгоритм цветов точно как в ini-to-channels.ts

@@ -3,6 +3,8 @@
 // НЕ зависит от конкретной реализации Oscilloscope.
 // Готов к Tauri: нативный осциллограф реализует этот интерфейс.
 
+import type { Archive } from '../oscilloscope/core/Archive.js';
+
 /** Конфигурация канала (подмножество ChannelConfig, достаточное для внешних вызовов) */
 export interface OscChannelConfig {
   id: string;
@@ -45,6 +47,24 @@ export interface IOscilloscopeApi {
   setSerialPort(port: unknown): void;
   setSlaveAddress(addr: number): void;
   destroy(): void;
-   showFrozenState(message: string): void;
+  showFrozenState(message: string): void;
   resumeFromFrozen(): void;
+
+  // Поля и методы, нужные внешним UI-компонентам (ChannelRow, меню и др.).
+  // Раньше вызывались через `(window as any).osc` — теперь типизированы здесь.
+
+  /** true, если осциллограф работает в режиме просмотрщика (без живого цикла). */
+  viewerMode: boolean;
+
+  /** Доступ к внутреннему архиву сигналов (для окна «Посчитать коэффициент»). */
+  getArchive(): Archive;
+
+  /** true, если канал с указанным id входит в текущую совмещённую строку. */
+  isChannelInCompositeGroup(channelId: string): boolean;
+
+  /** Пересчитывает высоту совмещённой строки после изменения свойств канала. */
+  checkAndUpdateCompositeHeight(channelId: string): void;
+
+  /** Отрисовка видимых графиков (нужна для принудительной перерисовки в viewer-mode). */
+  renderVisibleGraphs(): void;
 }

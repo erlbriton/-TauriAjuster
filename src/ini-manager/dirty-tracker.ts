@@ -37,12 +37,6 @@ export function markDirty(paramId: string): void {
   console.log(`[DirtyTracker] Параметр помечен как изменённый: ${paramId}`);
 }
 
-/** Снять пометку с одного параметра */
-export function clearDirty(paramId: string): void {
-  dirtyParams.delete(paramId);
-  updateStar(paramId, false);
-}
-
 /** Очистить все пометки (обычно после сохранения файла) */
 export function clearAllDirty(): void {
   dirtyParams.clear();
@@ -58,9 +52,4 @@ export function isDirty(paramId: string): boolean {
 /** Есть ли хотя бы один несохранённый параметр */
 export function hasAnyDirty(): boolean {
   return dirtyParams.size > 0;
-}
-
-/** Получить список всех несохранённых параметров (для диагностики) */
-export function getDirtyParams(): string[] {
-  return Array.from(dirtyParams);
 }
