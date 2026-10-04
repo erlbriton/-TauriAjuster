@@ -39,3 +39,15 @@ export function parseIpToRegisters(ipString: string): [number, number] | null {
   // Возвращаем в порядке Little-Endian регистров (младшее слово первым)
   return [lowWord, highWord];
 }
+
+/**
+ * Преобразует два 16-битных регистра Modbus в точечный IP-адрес.
+ *
+ * @param lowWord  Младшее 16-битное слово (первый регистр в списке Modbus).
+ * @param highWord Старшее 16-битное слово (второй регистр в списке Modbus).
+ * @returns Строка вида "192.168.1.10".
+ */
+export function registersToIp(lowWord: number, highWord: number): string {
+  const value = ((highWord << 16) | lowWord) >>> 0;
+  return `${(value >>> 24) & 0xFF}.${(value >>> 16) & 0xFF}.${(value >>> 8) & 0xFF}.${value & 0xFF}`;
+}
