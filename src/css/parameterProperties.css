@@ -34,6 +34,8 @@
     padding: 6px 10px !important;
     background: #d8d8d8 !important;
     border-bottom: 1px solid #bbb !important;
+    cursor: move !important;
+    user-select: none !important;
 }
 
 .param-props-title {

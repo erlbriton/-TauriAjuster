@@ -169,6 +169,54 @@ export function initParamPropertiesUI(): void {
             hide();
         }
     });
+
+    // --- Перетаскивание окна за шапку ---
+    const win = overlay.querySelector<HTMLElement>('.param-props-window');
+    const header = overlay.querySelector<HTMLElement>('.param-props-header');
+
+    if (win && header) {
+        let isDragging = false;
+        let startX = 0;
+        let startY = 0;
+        let startLeft = 0;
+        let startTop = 0;
+
+        header.addEventListener('mousedown', (e: MouseEvent) => {
+            // Игнорируем клик по кнопке закрытия
+            if ((e.target as HTMLElement).closest('.param-props-close-btn')) return;
+
+            // Переключаем окно с flex-центрирования на absolute-позиционирование,
+            // сохраняя текущие координаты — чтобы окно визуально не «прыгнуло».
+            const rect = win.getBoundingClientRect();
+            win.style.position = 'fixed';
+            win.style.left = `${rect.left}px`;
+            win.style.top = `${rect.top}px`;
+            win.style.margin = '0';
+
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            startLeft = rect.left;
+            startTop = rect.top;
+
+            document.body.style.userSelect = 'none';
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e: MouseEvent) => {
+            if (!isDragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            win.style.left = `${startLeft + dx}px`;
+            win.style.top = `${startTop + dy}px`;
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (!isDragging) return;
+            isDragging = false;
+            document.body.style.userSelect = '';
+        });
+    }
 }
 
 /**
@@ -268,6 +316,16 @@ export function showParamPropertiesModal(param: ParamInfo, allSiblings: ParamInf
     const typeView = document.getElementById('paramPropsTypeView') as HTMLInputElement | null;
     if (typeView) {
         typeView.value = row?.getAttribute('data-type') ?? '';
+    }
+
+    // Сброс позиции окна: при каждом открытии окно снова центрируется
+    // (перетаскивание действует только в течение текущего показа).
+    const win = overlay.querySelector<HTMLElement>('.param-props-window');
+    if (win) {
+        win.style.position = '';
+        win.style.left = '';
+        win.style.top = '';
+        win.style.margin = '';
     }
 
     overlay.classList.remove('hidden');
