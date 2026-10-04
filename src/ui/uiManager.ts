@@ -44,7 +44,7 @@ export interface ChannelBuffer {
   toArray(): number[];
 }
 
-export interface UiManagerDeps {
+interface UiManagerDeps {
   serial: ISerialPort;
   appState: AppState;                    // было any
   parser: ModbusParser;                  // было any

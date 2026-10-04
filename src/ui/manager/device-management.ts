@@ -25,7 +25,7 @@ import { showNewDeviceModal, setNewDeviceAddToLoaded } from '../new-device-ui.js
 import { processSingleFileContent } from '../../ini-manager/file-loader.js';
 import { PortCancelledError } from '../../serial/serial.js';
 
-export interface DeviceManagementUIDeps {
+interface DeviceManagementUIDeps {
   serial: ISerialPort;
   appState: AppState;
   parser: unknown; // ModbusParser

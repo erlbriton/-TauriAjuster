@@ -31,7 +31,7 @@ export type BackupLoadFn = (
 ) => Promise<void>;
 
 /** Всё, что handleBackupApply нужно из внешнего мира (из backup-ui.ts). */
-export interface BackupApplyContext {
+interface BackupApplyContext {
     selectedTemplateId: string | null;
     currentSource: {
         mechInputId: string;

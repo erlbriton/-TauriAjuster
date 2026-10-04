@@ -65,12 +65,6 @@ export interface DeviceRegistryItem {
 /** Реестр: локации → массив устройств */
 export const deviceRegistry: Record<string, DeviceRegistryItem[]> = {};
 
-// export let currentDeviceConfig: RawIniConfig | null = null;
-
-// export function setCurrentDeviceConfig(config: RawIniConfig | null): void {
-//   currentDeviceConfig = config;
-// }
-
 export let currentIniConfig: IniConfig | null = null;
 
 export function setCurrentIniConfig(config: IniConfig | null): void {
@@ -93,34 +87,6 @@ export function parseRegisterAddress(addrString: string): { reg: number | null; 
     reg: parseInt(valStr, base),
     sub: parts[1] ? parts[1].toUpperCase() : null
   };
-}
-
-export function getSectionRange(
-  config: RawIniConfig | null,
-  sectionName: string
-): { start: number; count: number } {
-  if (!config || !config[sectionName]) return { start: 0, count: 0 };
-  const section = config[sectionName];
-  let minReg = Infinity;
-  let maxReg = -Infinity;
-  Object.values(section).forEach((parts: string | string[]) => {
-    if (Array.isArray(parts)) {
-      const dataType = String(parts[2] || '').toUpperCase();
-      const regAddrString = String(dataType === 'TBIT' ? (parts[5] ?? '') : (parts[4] ?? ''));
-      const parsed = parseRegisterAddress(regAddrString);
-      if (parsed.reg !== null && !isNaN(parsed.reg)) {
-        minReg = Math.min(minReg, parsed.reg);
-        const is32Bit = dataType.toUpperCase().includes('FLOAT') ||
-          dataType.toUpperCase().includes('DWORD') ||
-          dataType.toUpperCase().includes('LONG') ||
-          dataType.toUpperCase().includes('INT32') ||
-          dataType.toUpperCase() === 'TIPADDR';
-        maxReg = Math.max(maxReg, parsed.reg + (is32Bit ? 1 : 0));
-      }
-    }
-  });
-  if (minReg === Infinity) return { start: 0, count: 0 };
-  return { start: minReg, count: maxReg - minReg + 1 };
 }
 
 // Регистрация устройства.

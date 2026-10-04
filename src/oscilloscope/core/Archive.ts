@@ -6,7 +6,7 @@ export interface Sample {
     raw: number;    // сырое значение из регистра
 }
 
-export class ChannelRingBuffer {
+class ChannelRingBuffer {
     public timestamps: Float64Array;
     public values: Float64Array;      // Float64 — чтобы 32-битные IP-адреса не теряли младшие биты
     public rawValues: Float64Array;   // Float64 — по той же причине

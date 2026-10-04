@@ -204,7 +204,7 @@ export function createCompositeRow(ctx: CompositeContext, channels: Channel[]): 
  * Вызывается из createCompositeRow() перед созданием новой группы
  * и при клике «Разъединить» в меню совмещённой строки.
  */
-export function destroyCompositeRow(ctx: CompositeContext): void {
+function destroyCompositeRow(ctx: CompositeContext): void {
   const row = ctx.getCompositeRow();
   if (!row) return;
 

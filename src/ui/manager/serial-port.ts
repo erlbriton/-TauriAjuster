@@ -13,7 +13,7 @@ import { PortCancelledError } from '../../serial/serial.js';
 import { updateIdBanner, showCompactError, showIdModal } from '../ui.js'; // Импорт утилит UI
 
 // Типизация зависимостей для этого модуля
-export interface SerialPortUIDeps {
+interface SerialPortUIDeps {
   serial: ISerialPort;
   appState: AppState;
   comSelect: HTMLSelectElement | null;

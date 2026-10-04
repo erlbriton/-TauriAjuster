@@ -3,7 +3,7 @@ import { scanModbusNetwork } from '../core/modbus-scanner.js';
 import type { FoundDevice } from '../core/modbus-scanner.js';
 
 /** Зависимости, которые передаёт координатор UI (uiManager) */
-export interface ModbusScanUiDeps {
+interface ModbusScanUiDeps {
     /** Открыт ли COM-порт */
     isPortOpen(): boolean;
     /** Приостановить обычный опрос устройства на время поиска */

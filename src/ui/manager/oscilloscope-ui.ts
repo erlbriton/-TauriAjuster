@@ -11,7 +11,7 @@ import type { AppState } from '../../core/app-state.js';
 import type { IOscilloscopeApi } from '../../core/osc-api.js';
 import type { ChannelBuffer } from '../uiManager.js';
 
-export interface OscilloscopeUIDeps {
+interface OscilloscopeUIDeps {
   serial: ISerialPort;
   appState: AppState;
   parser: unknown; // ModbusParser

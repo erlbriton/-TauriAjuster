@@ -19,7 +19,7 @@ import { initHelpUI, showHelpWindow } from '../help-ui.js';
 import { SearchPanel } from '../../oscilloscope/ui/SearchPanel.js';
 import { hasAnyDirty } from '../../ini-manager/dirty-tracker.js';
 
-export interface SearchNavigationUIDeps {
+interface SearchNavigationUIDeps {
   appState: AppState;
   treeSearchOverlay: HTMLElement | null;
   treeSearchInput: HTMLInputElement | null;

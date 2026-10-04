@@ -46,7 +46,7 @@ import {
  *  3) сохраняет файл в запомненную папку базы; при любом сбое —
  *     скачивает в "Загрузки", чтобы данные не потерялись.
  */
-export interface AddToBaseSource {
+interface AddToBaseSource {
     templateSelectId: string;
     mechInputId: string;
     locInputId: string;

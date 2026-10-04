@@ -24,7 +24,7 @@ import { serialManager } from '../../serial/serial-manager.js';
 const TCP_HOST_KEY = 'tauri-ajuster:tcp-host';
 const TCP_PORT_KEY = 'tauri-ajuster:tcp-port';
 
-export interface CommunicationSettingsUIDeps {
+interface CommunicationSettingsUIDeps {
   serial: ISerialPort;
   appState: AppState;
   baudSelect: HTMLSelectElement | null;

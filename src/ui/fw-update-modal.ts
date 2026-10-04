@@ -115,7 +115,7 @@ export function showFwUpdateModal(info: FwUpdateInfo): void {
     overlay.classList.remove('hidden');
 }
 
-export function hideFwUpdateModal(): void {
+function hideFwUpdateModal(): void {
     document.getElementById('fwUpdateOverlay')?.classList.add('hidden');
 }
 

@@ -30,7 +30,7 @@ interface SavedBasesInfo {
 /**
  * Зависимости, передаваемые из main.ts при инициализации.
  */
-export interface BaseDirUIDeps {
+interface BaseDirUIDeps {
     /** Общее состояние приложения (нужно для saveIniChanges). */
     appState: AppState;
     /** Есть ли несохранённые изменения в открытых INI. */

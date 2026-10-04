@@ -73,7 +73,7 @@ function showInfoWindow(title: string, text: string): void {
 }
 
 /** Окно "О программе" */
-export function showAboutWindow(): void {
+function showAboutWindow(): void {
     showInfoWindow(
         'О программе',
         'Tauri Ajuster v0.1\ninfo@intmash.ru   www.intmash.ru\nБердск 2026',
