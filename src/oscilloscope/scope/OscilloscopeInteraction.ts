@@ -9,6 +9,47 @@
 import type { Channel } from "../core/Channel";
 import type { RenderingContext } from "./OscilloscopeRenderer";
 
+/**
+ * Выбирает канал или совмещённую строку по координате Y клика.
+ *
+ * Сначала пытается найти видимый обычный канал (пропуская скрытые —
+ * например, входящие в совмещённую группу). Если нашли — кликает по
+ * его DOM-элементу (что запускает существующий обработчик `click`
+ * на строке). Если не нашли — проверяет, не попал ли клик в область
+ * совмещённой строки, и кликает по ней.
+ *
+ * Вынесено из Oscilloscope.getRenderingContext(), чтобы не держать
+ * 30 строк DOM-логики inline в сборщике контекста.
+ */
+export function selectChannelAtClientY(ctx: RenderingContext, clientY: number): void {
+  // Сначала пытаемся найти обычный канал (видимый)
+  const rowsRect = ctx.rowsContainer.getBoundingClientRect();
+  const scrollTop = ctx.rowsContainer.scrollTop;
+  const y = clientY - rowsRect.top + scrollTop;
+  let acc = 0;
+
+  for (const ch of ctx.visibleChannels) {
+    const row = ctx.table.getRow(ch.id);
+    if (!row || !row.getIsVisible()) continue;
+
+    acc += ch.rowHeight;
+    if (y < acc) {
+      // Нашли обычный канал — кликаем по его строке
+      row.getElement().click();
+      return;
+    }
+  }
+
+  // Если обычный канал не найден, проверяем совмещённую строку
+  if (ctx.compositeRow && ctx.compositeRow.getIsVisible()) {
+    const compositeRect = ctx.compositeRow.getElement().getBoundingClientRect();
+    if (clientY >= compositeRect.top && clientY <= compositeRect.bottom) {
+      // Клик попал в совмещённую строку — выбираем её
+      ctx.compositeRow.getElement().click();
+    }
+  }
+}
+
 export function measureChannelAtTime(
   ctx: RenderingContext,
   channelId: string,

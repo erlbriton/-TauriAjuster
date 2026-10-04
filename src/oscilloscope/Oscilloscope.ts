@@ -35,6 +35,7 @@ import {
   measureChannelAtTime, formatIntervalDuration, 
   syncViewPositions, bindSharedCanvasEvents,
   type RenderingContext } from "./scope/OscilloscopeRenderer";
+import { selectChannelAtClientY } from "./scope/OscilloscopeInteraction";
 import { bindEvents, bindTimeZoomWheel, updateTimeScaleReadout, type BindingsContext } from "./scope/OscilloscopeBindings";
 import {
   getGraphColumnMetrics as canvasMetrics,
@@ -196,13 +197,12 @@ public setAppState(state: AppState): void {
     }
     return this.appState;
   }
-
   public async initialize(
     targetContainer?: HTMLElement | string,
   ): Promise<void> {
     return lifecycleInitialize(this, targetContainer);
   }
-  
+
   /**
    * Строит контекст для канвас-функций (scope/OscilloscopeCanvas).
    * Состояние не копируется — передаются живые ссылки и сеттер.
@@ -215,7 +215,6 @@ public setAppState(state: AppState): void {
       setGraphColumnOffset: (value) => { this.graphColumnOffset = value; },
     };
   }
-
   /** Публичная обёртка: синхронизация размера/позиции canvas (внешний API не менялся). */
   public syncCanvasLayout(): void {
     canvasSyncLayout(this.getCanvasContext());
@@ -233,7 +232,6 @@ public setAppState(state: AppState): void {
   public draw(data: Record<string, number>): void {
     loopDraw(this.getLoopContext(), data);
   }
-
   /**
    * Строит контекст кадрового цикла (scope/OscilloscopeLoop).
    * Тайминг-состояние остаётся на классе — им делится lifecycle.
@@ -408,36 +406,11 @@ public setAppState(state: AppState): void {
         this.createCompositeRow(channels);
       },
       
-      // Реализация выбора канала или совмещённой строки по координате Y.
-      // Сначала пытаемся найти обычный канал. Если не нашли — проверяем,
-      // не попал ли клик в область совмещённой строки.
+      // Выбор канала или совмещённой строки по координате Y клика.
+      // Реализация вынесена в scope/OscilloscopeInteraction.ts —
+      // здесь только делегирование.
       selectAtClientY: (clientY) => {
-        // Сначала пытаемся найти обычный канал (видимый)
-        const rowsRect = this.rowsContainer.getBoundingClientRect();
-        const scrollTop = this.rowsContainer.scrollTop;
-        const y = clientY - rowsRect.top + scrollTop;
-        let acc = 0;
-        
-        for (const ch of this.visibleChannels) {
-          const row = this.table.getRow(ch.id);
-          if (!row || !row.getIsVisible()) continue;
-          
-          acc += ch.rowHeight;
-          if (y < acc) {
-            // Нашли обычный канал — кликаем по его строке
-            row.getElement().click();
-            return;
-          }
-        }
-        
-        // Если обычный канал не найден, проверяем совмещённую строку
-        if (this.compositeRow && this.compositeRow.getIsVisible()) {
-          const compositeRect = this.compositeRow.getElement().getBoundingClientRect();
-          if (clientY >= compositeRect.top && clientY <= compositeRect.bottom) {
-            // Клик попал в совмещённую строку — выбираем её
-            this.compositeRow.getElement().click();
-          }
-        }
+        selectChannelAtClientY(this.getRenderingContext(), clientY);
       },
 
       // Передаем ссылку на совмещённую строку в контекст рендеринга.
@@ -450,12 +423,10 @@ public setAppState(state: AppState): void {
   public loop(now: number): void {
     loopTick(this.getLoopContext(), now);
   }
-
   /** Публичная обёртка: отрисовка видимых графиков (вызывает ChannelRow). */
   public renderVisibleGraphs(): void {
     loopRenderGraphs(this.getLoopContext());
   }
-
   // ========================================================================
   // СОЗДАНИЕ СОВМЕЩЁННОЙ СТРОКИ (Composite Channel Row)
   // ========================================================================
@@ -503,7 +474,6 @@ public setAppState(state: AppState): void {
       renderVisibleGraphs: () => this.renderVisibleGraphs(),
     };
   }
-
   /** Публичная обёртка: пересчёт высоты совмещённой строки (вызывает ChannelRow). */
   public checkAndUpdateCompositeHeight(channelId: string): void {
     compositeCheckHeight(this.getCompositeContext(), channelId);
@@ -517,7 +487,6 @@ public setAppState(state: AppState): void {
   public showFrozenState(message: string): void {
     lifecycleShowFrozenState(this, message);
   }
-
   /**
    * Возобновляет работу после "заморозки".
    * Запускает рендер-цикл и закрывает окно.
