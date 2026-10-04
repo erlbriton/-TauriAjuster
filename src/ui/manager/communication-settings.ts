@@ -11,6 +11,8 @@
 
 import type { ISerialPort } from '../../serial/ISerialPort.js';
 import type { AppState } from '../../core/app-state.js';
+import type { IOscilloscopeApi } from '../../core/osc-api.js';
+import type { ChannelBuffer } from '../uiManager.js';
 import { showIdModal, showCompactError } from '../ui.js';
 import { showAddressDialog } from '../confirm-dialog.js';
 import { hasAnyDirty } from '../../ini-manager/dirty-tracker.js';
@@ -35,13 +37,13 @@ export interface CommunicationSettingsUIDeps {
   readLoop: (
     serial: ISerialPort,
     parser: unknown,
-    view: any, // IOscilloscopeApi | null
-    buffers: any[],
+    view: IOscilloscopeApi | null,
+    buffers: ChannelBuffer[],
     state: AppState
   ) => void;
   parser: unknown;
-  view: any; // IOscilloscopeApi | null
-  buffers: any[];
+  view: IOscilloscopeApi | null;
+  buffers: ChannelBuffer[];
 }
 
 export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): void {
@@ -440,8 +442,8 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
     showCompactError('Контроллер не отвечает. Проверьте адрес и подключение.', 3000);
 
     const osc = window.osc;
-    if (osc && typeof (osc as any).showFrozenState === 'function') {
-      (osc as any).showFrozenState('');
+    if (osc) {
+      osc.showFrozenState('');
     }
   });
 
@@ -449,8 +451,8 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
   window.addEventListener('app:controller-responding', () => {
     console.log('[UI] Получено событие "контроллер отвечает"');
     const osc = window.osc;
-    if (osc && typeof (osc as any).resumeFromFrozen === 'function') {
-      (osc as any).resumeFromFrozen();
+    if (osc) {
+      osc.resumeFromFrozen();
     }
   });
 

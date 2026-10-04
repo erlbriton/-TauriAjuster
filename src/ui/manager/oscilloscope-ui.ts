@@ -9,20 +9,21 @@
 import type { ISerialPort } from '../../serial/ISerialPort.js';
 import type { AppState } from '../../core/app-state.js';
 import type { IOscilloscopeApi } from '../../core/osc-api.js';
+import type { ChannelBuffer } from '../uiManager.js';
 
 export interface OscilloscopeUIDeps {
   serial: ISerialPort;
   appState: AppState;
   parser: unknown; // ModbusParser
   view: IOscilloscopeApi | null;
-  buffers: any[]; // ChannelBuffer[]
+  buffers: ChannelBuffer[];
   
   // Функция запуска цикла чтения данных (необходима при открытии осциллографа)
   readLoop: (
     serial: ISerialPort,
     parser: unknown,
     view: IOscilloscopeApi | null,
-    buffers: any[] | null,
+    buffers: ChannelBuffer[] | null,
     state: AppState
   ) => void;
 

@@ -33,7 +33,7 @@ export class TimelineScrollbar {
         this.slider.min = String(minTime);
         this.slider.max = String(maxTime);
         
-        if (parseInt(this.slider.value) === this.maxTime) {
+        if (parseInt(this.slider.value, 10) === this.maxTime) {
             this.slider.value = String(maxTime);
         }
     }
@@ -56,14 +56,14 @@ export class TimelineScrollbar {
     }
 
     private handleSliderChange(): void {
-        const timestamp = parseInt(this.slider.value);
+        const timestamp = parseInt(this.slider.value, 10);
         if (this.onChangeCallback) {
             this.onChangeCallback(timestamp);
         }
     }
 
     public isAtLivePosition(): boolean {
-        return parseInt(this.slider.value) >= this.maxTime - 100;
+        return parseInt(this.slider.value, 10) >= this.maxTime - 100;
     }
 
     public destroy(): void {

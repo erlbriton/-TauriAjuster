@@ -16,6 +16,7 @@ import { PixiView } from "../graphics/PixiView";
 import type { Table } from "../ui/Table";
 import { CompositeChannelRow } from "../ui/CompositeChannelRow";
 import { syncViewPositions, type RenderingContext } from "./OscilloscopeRenderer";
+import { ChannelRow } from "../ui/ChannelRow";
 
 /** Ключ, под которым PixiView совмещённой строки хранится в общей карте pixiViews. */
 const COMPOSITE_VIEW_KEY = "__composite_row__";
@@ -181,9 +182,9 @@ export function createCompositeRow(ctx: CompositeContext, channels: Channel[]): 
     }
   }
 
-  // ШАГ 6: Сбрасываем состояние выбора анализа через статический метод ChannelRow.
+  // ШАГ 6: Сбрасываем состояние выбора анализа.
   // Это убирает красную подсветку со строк и обнуляет счётчик выбранных.
-  (ctx.table.getRow(channels[0].id)?.constructor as any).clearAllAnalysisSelection();
+  ChannelRow.clearAllAnalysisSelection();
 
   // ШАГ 7: Сохраняем ссылки для использования в renderVisibleGraphs().
   ctx.setComposite(compositeRow, compositePixiView, channels);
@@ -216,11 +217,7 @@ export function destroyCompositeRow(ctx: CompositeContext): void {
       // Сбрасываем высоту всех каналов к дефолтной 25px.
       if (channel.rowHeight !== 25) {
         channel.rowHeight = 25;
-        if (typeof (chRow as any).updateHeight === "function") {
-          (chRow as any).updateHeight();
-        } else {
-          chRow.getElement().style.height = "25px";
-        }
+        chRow.getElement().style.height = "25px";
       }
       chRow.setVisible(true);
     }

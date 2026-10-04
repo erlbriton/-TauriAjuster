@@ -15,6 +15,7 @@ import type { Table } from "../ui/Table";
 import type { Toolbar } from "../ui/Toolbar";
 import type { BottomPanels } from "../ui/BottomPanels";
 import type { Settings } from "../config/Settings";
+import type { CompositeChannelRow } from "../ui/CompositeChannelRow";
 
 // Реэкспорт публичного API из OscilloscopeInteraction.ts — обратная
 // совместимость импортов для Oscilloscope.ts, OscilloscopeChannels.ts,
@@ -59,7 +60,7 @@ export interface RenderingContext {
 
   // Ссылка на текущую совмещённую строку (если создана).
   // Используется обработчиком правого клика на канвасе для открытия меню.
-  compositeRow: any;
+  compositeRow: CompositeChannelRow | null;
 }
 
 export async function renderVisibleChannels(

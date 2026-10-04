@@ -47,7 +47,7 @@ export interface BackupApplyContext {
  * Очищает имя файла от недопустимых символов для File System Access API (Windows).
  * Заменяет всё, кроме букв, цифр, точек, дефисов и подчеркиваний, на '_'.
  */
-function sanitizeFileName(name: string): string {
+function sanitizeFileNameStrict(name: string): string {
     return name.replace(/[^a-zA-Z0-9\u0400-\u04FF._-]/g, '_');
 }
 
@@ -165,7 +165,7 @@ export async function handleBackupApply(ctx: BackupApplyContext): Promise<void> 
         if (oldName) fileName = oldName;
     }
     fileName = fileName.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
-    fileName = sanitizeFileName(fileName);
+    fileName = sanitizeFileNameStrict(fileName);
 
     const bytes = encodeToWindows1251(content);
     const file = new File([bytes], fileName, { type: 'text/plain' });

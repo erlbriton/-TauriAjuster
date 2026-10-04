@@ -26,7 +26,7 @@ export function isTauriMode(): boolean {
 }
 
 /** Убирает недопустимые символы из имени файла для File System Access API (Windows не разрешает !:*?"<>| и т.п.). */
-export function sanitizeFileName(name: string): string {
+export function sanitizeFileNameLoose(name: string): string {
     return name.replace(/[\\/:*?"<>|!]/g, '_');
 }
 
@@ -52,7 +52,7 @@ export function resolveDeviceSubdirName(location: string, idText: string): strin
     // 1. Location задан — используем его.
     const loc = location.trim();
     if (loc) {
-        return sanitizeFileName(loc);
+        return sanitizeFileNameLoose(loc);
     }
 
     // 2. Location пустой — извлекаем токены из ID-строки.
@@ -72,7 +72,7 @@ export function resolveDeviceSubdirName(location: string, idText: string): strin
     }
     if (middle.length === 0) return null;
 
-    return sanitizeFileName(middle.join(' '));
+    return sanitizeFileNameLoose(middle.join(' '));
 }
 
 /**

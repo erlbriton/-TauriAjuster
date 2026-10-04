@@ -11,6 +11,7 @@ import type { ISerialPort } from '../../serial/ISerialPort.js';
 import type { AppState } from '../../core/app-state.js';
 import type { IOscilloscopeApi } from '../../core/osc-api.js';
 import type { ModbusParser } from '../../serial/modbus.js';
+import type { ChannelBuffer } from '../uiManager.js';
 import { showIdModal, showCompactError, updateIdBanner } from '../ui.js';
 import { parseDeviceIdString, parseDeviceIdFull } from '../../core/report-data.js';
 import type { FwUpdateInfo } from '../fw-update-modal.js';
@@ -29,7 +30,7 @@ export interface DeviceManagementUIDeps {
   appState: AppState;
   parser: unknown; // ModbusParser
   view: IOscilloscopeApi | null;
-  buffers: any[]; // ChannelBuffer[]
+  buffers: ChannelBuffer[];
   connectBtn: HTMLButtonElement | null;
   refreshBtn: HTMLButtonElement | null;
   deviceListActionBtn: HTMLButtonElement | null;
@@ -49,7 +50,7 @@ export interface DeviceManagementUIDeps {
     serial: ISerialPort,
     parser: unknown,
     view: IOscilloscopeApi | null,
-    buffers: any[] | null,
+    buffers: ChannelBuffer[] | null,
     state: AppState
   ) => void;
   

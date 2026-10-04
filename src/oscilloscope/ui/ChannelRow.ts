@@ -469,7 +469,7 @@ export class ChannelRow {
         }
     }
 
-    private static clearAllAnalysisSelection(): void {
+    static clearAllAnalysisSelection(): void {
         // Проходим по всем выбранным строкам и сбрасываем их состояние.
         for (const row of ChannelRow.analysisSelectedRows) {
             row.isSelectedForAnalysis = false;
