@@ -6,19 +6,51 @@ document.addEventListener('DOMContentLoaded', () => {
     const sidebarResizer = document.querySelector<HTMLElement>('.sidebar-resizer');
     const wrapper = document.querySelector<HTMLElement>('.panel-content-wrapper');
     const oscContainer = document.getElementById('osc-container');
-    
-    const MIN_RIGHT_PANEL_WIDTH = 610; 
-    const OSCILLOSCOPE_WIDTH = 900;
+
+    // Доли от ширины окна (не пиксели!) — чтобы пропорции сохранялись
+    // при любом DPI (100%, 125%, 150%, ...) и любом размере окна.
+    // При фиксированных пикселях на 125% DPI резерв 900+610 не влезал в
+    // CSS-ширину окна, и дерево схлопывалось до 40px.
+    //
+    // Верхнего потолка у дерева нет — таблицу можно сжать как угодно сильно.
+    // Единственное ограничение: когда осц. скрыт, мы резервируем место
+    // под его будущее появление, чтобы сайдбар не «прыгал» при открытии.
+    const TREE_MIN_SHARE = 0.05;      // мин. доля дерева от ширины окна (5%)
+    const OSC_RESERVED_SHARE = 0.45;  // резерв под осц., когда он скрыт
+
+    /**
+     * Считает верхнюю границу ширины дерева INI.
+     *
+     * Логика:
+     *   - Если осц. скрыт — резервируем 45% wrapper под его будущее
+     *     появление, чтобы сайдбар не «прыгал» при открытии.
+     *   - Если осц. открыт — дерево может растянуться на всю wrapper
+     *     (таблица сжимается как угодно сильно, это допустимо).
+     *
+     * Нижняя граница (5% от ширины окна) применяется отдельно —
+     * в doDragSidebar и в enforceSidebarLimits.
+     */
+    function calcMaxSidebarWidth(): number {
+        if (!wrapper || !oscContainer) return 0;
+        const wrapperWidth = wrapper.getBoundingClientRect().width;
+        const isOscHidden = oscContainer.classList.contains('hidden');
+        const oscReserve = isOscHidden ? wrapperWidth * OSC_RESERVED_SHARE : 0;
+        return wrapperWidth - oscReserve;
+    }
 
     function enforceSidebarLimits(): void {
         if (!sidebar || !wrapper || !oscContainer) return;
-        const containerRect = wrapper.getBoundingClientRect();
-        const isOscHidden = oscContainer.classList.contains('hidden');
-        const virtualOscOffset = isOscHidden ? OSCILLOSCOPE_WIDTH : 0;
-        let maxSidebarWidth = containerRect.width - virtualOscOffset - MIN_RIGHT_PANEL_WIDTH;
-        if (maxSidebarWidth < 40) maxSidebarWidth = 40;
+        const maxSidebarWidth = calcMaxSidebarWidth();
+        const minSidebarWidth = window.innerWidth * TREE_MIN_SHARE;
+
+        // Слишком широкое — сжимаем до верхней границы.
         if (sidebar.offsetWidth > maxSidebarWidth) {
             sidebar.style.width = `${maxSidebarWidth}px`;
+        }
+        // Слишком узкое — растягиваем до нижней границы.
+        // (Например, при сжатии окна или при смене DPI.)
+        if (sidebar.offsetWidth < minSidebarWidth) {
+            sidebar.style.width = `${minSidebarWidth}px`;
         }
     }
 
@@ -30,13 +62,12 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.classList.add('is-resizing');
 
             const doDragSidebar = (moveEvent: MouseEvent): void => {
-                const containerRect = wrapper.getBoundingClientRect();
-                const isOscHidden = oscContainer.classList.contains('hidden');
-                const virtualOscOffset = isOscHidden ? OSCILLOSCOPE_WIDTH : 0;
-                let maxSidebarWidth = containerRect.width - virtualOscOffset - MIN_RIGHT_PANEL_WIDTH;
-                if (maxSidebarWidth < 40) maxSidebarWidth = 40;
-                let newWidth = moveEvent.clientX - containerRect.left;
-                if (newWidth < 40) newWidth = 40; 
+                const wrapperRect = wrapper.getBoundingClientRect();
+                const maxSidebarWidth = calcMaxSidebarWidth();
+                const minSidebarWidth = window.innerWidth * TREE_MIN_SHARE;
+
+                let newWidth = moveEvent.clientX - wrapperRect.left;
+                if (newWidth < minSidebarWidth) newWidth = minSidebarWidth;
                 if (newWidth > maxSidebarWidth) newWidth = maxSidebarWidth;
                 sidebar.style.width = `${newWidth}px`;
             };
@@ -53,7 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-        const table = document.querySelector<HTMLElement>('.modbus-grid');
+    const table = document.querySelector<HTMLElement>('.modbus-grid');
     const groupHeaders = document.querySelectorAll<HTMLElement>('.modbus-grid thead tr:first-child th');
     const subHeaders = document.querySelectorAll<HTMLElement>('.modbus-grid thead tr:last-child th');
     const cols = document.querySelectorAll<HTMLElement>('.modbus-grid colgroup col');
@@ -233,4 +264,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     enforceSidebarLimits();
+
+    // При изменении размера окна заново проверяем границы —
+    // иначе при сжатии окна дерево останется старым и «съест» таблицу.
+    window.addEventListener('resize', enforceSidebarLimits);
 });
