@@ -5,6 +5,7 @@
  * - Автоподключение при выборе порта
  * - Обработку отключения (onDisconnect)
  * - Кнопку ID (запрос идентификации)
+ * - Пункт "Off" в списке портов для ручного отключения
  */
 
 import type { ISerialPort } from '../../serial/ISerialPort.js';
@@ -48,12 +49,17 @@ export function initSerialPortUI(deps: SerialPortUIDeps): void {
     restoreConnection
   } = deps;
 
+  // Специальное значение для пункта "Off" в списке портов.
+  // Не может совпасть с реальным именем порта (COM3, /dev/ttyUSB0 и т.п.),
+  // поэтому безопасно использовать его как маркер «отключиться».
+  const OFF_VALUE = '__off__';
+
   // Переменная для хранения ID интервала опроса портов.
   let comPortsPollInterval: number | null = null;
-  
-  // Флаг ручного отключения (нужно синхронизировать с основным состоянием или хранить здесь)
-  // Для простоты пока храним локально, но лучше вынести в appState, если нужно глобально
-  let isManualDisconnect = false; 
+
+  // Флаг ручного отключения (подавляет предупреждение "Связь потеряна"
+  // в обработчике onDisconnect при release()).
+  let isManualDisconnect = false;
 
   // --- Логика динамического обновления списка COM-портов ---
   if (comSelect) {
@@ -67,12 +73,11 @@ export function initSerialPortUI(deps: SerialPortUIDeps): void {
         const currentSelection = comSelect.value;
         comSelect.innerHTML = '';
 
-        const defaultOption = document.createElement('option');
-        defaultOption.text = 'Выберите порт';
-        defaultOption.value = '';
-        defaultOption.disabled = true;
-        defaultOption.selected = true;
-        comSelect.add(defaultOption);
+        // Off — первый пункт, всегда доступен. Выбор Off отключает порт.
+        const offOption = document.createElement('option');
+        offOption.value = OFF_VALUE;
+        offOption.text = 'Off';
+        comSelect.add(offOption);
 
         if (ports.length === 0) {
           const noPortsOption = document.createElement('option');
@@ -85,14 +90,24 @@ export function initSerialPortUI(deps: SerialPortUIDeps): void {
             option.value = port;
             option.text = port;
             comSelect.add(option);
-            if (port === currentSelection) {
-              option.selected = true;
-            }
           }
+        }
+
+        // Восстановление выбора:
+        // - если до обновления был выбран реальный порт и он всё ещё в списке — оставляем;
+        // - иначе (был выбран Off, порт исчез, ничего не выбрано) — переключаемся на Off.
+        if (
+          currentSelection &&
+          currentSelection !== OFF_VALUE &&
+          ports.includes(currentSelection)
+        ) {
+          comSelect.value = currentSelection;
+        } else {
+          comSelect.value = OFF_VALUE;
         }
       } catch (error) {
         console.error('Ошибка получения списка портов:', error);
-        comSelect.innerHTML = '<option>Ошибка сканирования</option>';
+        comSelect.innerHTML = `<option value="${OFF_VALUE}">Off</option><option>Ошибка сканирования</option>`;
       }
     };
 
@@ -127,9 +142,37 @@ export function initSerialPortUI(deps: SerialPortUIDeps): void {
       }
     });
 
-    // --- АВТОПОДКЛЮЧЕНИЕ ПРИ ВЫБОРЕ ПОРТА ---
+    // --- АВТОПОДКЛЮЧЕНИЕ ПРИ ВЫБОРЕ ПОРТА (ИЛИ ОТКЛЮЧЕНИЕ ПО "OFF") ---
     comSelect.addEventListener('change', async () => {
       const portName = comSelect.value;
+
+      // Пункт "Off" — отключение от порта.
+      // isManualDisconnect=true подавляет предупреждение "Связь потеряна"
+      // в обработчике onDisconnect.
+      if (portName === OFF_VALUE) {
+        if (serial.isConnected) {
+          isManualDisconnect = true;
+          try {
+            serial.release();
+            console.log('[UI] Порт отключён через выбор "Off".');
+          } catch (err) {
+            console.error('[UI] Ошибка отключения порта:', err);
+            showIdModal(`Ошибка отключения: ${err instanceof Error ? err.message : String(err)}`);
+          } finally {
+            isManualDisconnect = false;
+          }
+        }
+        appState.isPolling = false;
+        updateIdBanner('');
+
+        const osc = window.osc;
+        if (osc && typeof osc.setConnectionStatus === 'function') {
+          osc.setConnectionStatus(false, '');
+        }
+        updateIdButtonState(false);
+        return;
+      }
+
       if (!portName) return;
       if (appState.isIdentifying) return;
 
@@ -150,7 +193,7 @@ export function initSerialPortUI(deps: SerialPortUIDeps): void {
         }
 
         restoreConnection();
-        updateIdButtonState(true); 
+        updateIdButtonState(true);
       } catch (err: unknown) {
         if (err instanceof PortCancelledError) return;
         const msg = err instanceof Error ? err.message : String(err);
@@ -178,19 +221,18 @@ export function initSerialPortUI(deps: SerialPortUIDeps): void {
 
       appState.isPolling = false;
       updateIdBanner('');
-      
+
       if (comSelect) {
-        comSelect.value = '';
         try {
           const ports = await window.__TAURI__.core.invoke<string[]>('list_serial_ports');
           comSelect.innerHTML = '';
-          const defaultOption = document.createElement('option');
-          defaultOption.text = 'Выберите порт';
-          defaultOption.value = '';
-          defaultOption.disabled = true;
-          defaultOption.selected = true;
-          comSelect.add(defaultOption);
-          
+
+          // Off — первый пункт (как и в updatePortsList).
+          const offOption = document.createElement('option');
+          offOption.value = OFF_VALUE;
+          offOption.text = 'Off';
+          comSelect.add(offOption);
+
           if (ports.length === 0) {
             const noPortsOption = document.createElement('option');
             noPortsOption.text = 'Порты не найдены';
@@ -204,6 +246,9 @@ export function initSerialPortUI(deps: SerialPortUIDeps): void {
               comSelect.add(option);
             }
           }
+
+          // После обрыва связи всегда показываем Off.
+          comSelect.value = OFF_VALUE;
         } catch (error) {
           console.error('[UI] Ошибка обновления списка портов при обрыве связи:', error);
         }
@@ -217,12 +262,11 @@ export function initSerialPortUI(deps: SerialPortUIDeps): void {
   const updateIdButtonState = (_connected: boolean): void => {
     if (!idBtn) return;
     // Текст всегда "ID", как требовалось
-    // idBtn.textContent = 'ID'; 
+    // idBtn.textContent = 'ID';
     // idBtn.title = 'Запросить ID устройства';
   };
 
   // Функция для внешнего вызова отключения (нужна для кнопки ID или других мест)
-  // Возвращаем её через замыкание или экспортируем отдельно, если нужно
   const disconnectPort = async (): Promise<void> => {
     try {
       isManualDisconnect = true;
@@ -235,15 +279,11 @@ export function initSerialPortUI(deps: SerialPortUIDeps): void {
       isManualDisconnect = false;
     }
   };
-  
-  // Экспортируем disconnectPort, если он нужен снаружи (например, для кнопки ID)
-  // Но пока оставим внутри, так как кнопка ID обрабатывается ниже
-  
+
   if (idBtn) {
     idBtn.addEventListener("click", async () => {
       // Если порт подключён — отключаем (старая логика кнопки ID была такой, но мы изменили на "только запрос ID")
       // Согласно новым требованиям: кнопка ID только шлёт запрос. Отключение — через кнопку "Подключить" или автоматически при ошибке.
-      // Но если вдруг нужно отключить именно этой кнопкой, раскомментируй блок ниже:
       /*
       if (serial.isConnected) {
         await disconnectPort();
@@ -251,7 +291,7 @@ export function initSerialPortUI(deps: SerialPortUIDeps): void {
         return;
       }
       */
-      
+
       // Новая логика: если не подключён — подключаем, потом шлём ID
       if (!serial.isConnected) {
         try {
