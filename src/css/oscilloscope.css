@@ -86,13 +86,15 @@
 .toolbar-group .osc-btn-properties {
     height: 32px;                     /* Высота кнопки */
     width: 64px;                      /* Ширина (в 2 раза больше высоты) */
-    background-color: #535a63;        /* Основной цвет */
-    border-top: 2px solid #5599ff;    /* Верхняя и левая рамка (светлый блик 3D) */
+    background-color: #0ec4d8;        /* Основной цвет */
+    /*border-top: 2px solid #5599ff; /*   /* Верхняя и левая рамка (светлый блик 3D) */
     border-left: 2px solid #5599ff;
     border-bottom: 2px solid #002b80; /* Нижняя и правая рамка (тень 3D) */
     border-right: 2px solid #002b80;
-    color: #ffffff;                    /* Цвет иконки */
+    color: #f3fb1bfe;      
+    font-size: 24px;   /* ← размер иконки ⚙ */              /* Цвет иконки */
 }
+
 
 .toolbar-group button.osc-btn-properties:hover,
 .toolbar-group .osc-btn-properties:hover {
