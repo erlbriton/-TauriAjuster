@@ -1,4 +1,5 @@
 // src-tauri/src/commands/serial.rs
+
 // Команды работы с последовательным портом:
 // - list_serial_ports: список доступных COM/ttyUSB/ttyACM;
 // - open_serial_port: открыть порт (без фонового чтения);
@@ -121,10 +122,21 @@ pub fn serial_transaction(
                     }
                 }
             }
-            Err(e) => {
+            Err(ref e) if is_fatal_read_error(e) => {
                 eprintln!("[RUST] serial_transaction: фатальная ошибка read: {}", e);
                 *guard = None;
                 return Err(format!("Ошибка чтения из порта: {}", e));
+            }
+            Err(ref e) => {
+                // Транзиентная ошибка линии: framing, overrun, parity, шум на шине.
+                // Порт НЕ закрываем — контроллер может быть занят обработкой
+                // запроса от другого мастера на RS-485 (дисплей).
+                // Сбрасываем silence-таймер: кадр испорчен, ждём следующий.
+                eprintln!(
+                    "[RUST] serial_transaction: транзиентная ошибка read (продолжаем): {}",
+                    e
+                );
+                last_byte_at = Some(Instant::now());
             }
         }
     }
@@ -162,4 +174,25 @@ pub fn close_serial_port(state: tauri::State<'_, SerialState>) -> Result<(), Str
     let mut guard = state.port.lock().map_err(|e| e.to_string())?;
     *guard = None;
     Ok(())
+}
+
+/// Различает транзиентные ошибки линии и фатальные ошибки, после которых
+/// handle порта мёртв и требуется переоткрытие.
+///
+/// Фатальные: порт физически исчез, кабель выдернули, pipe сломан.
+/// Транзиентные: кадр испорчен (framing/overrun/parity), но порт жив.
+///
+/// Это разделение критично при работе с RS-485, где на шине может быть
+/// второй мастер (дисплей). Пока он передаёт, USB-UART на стороне ПК
+/// может отдавать framing error — это НЕ обрыв.
+fn is_fatal_read_error(e: &std::io::Error) -> bool {
+    matches!(
+        e.kind(),
+        std::io::ErrorKind::BrokenPipe
+            | std::io::ErrorKind::NotFound
+            | std::io::ErrorKind::ConnectionAborted
+            | std::io::ErrorKind::ConnectionReset
+            | std::io::ErrorKind::UnexpectedEof
+            | std::io::ErrorKind::NotConnected
+    )
 }
