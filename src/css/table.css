@@ -310,3 +310,13 @@ td.cell-active div {
   pointer-events: none;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
+/* Имя и Описание — выравнивание по левому краю.
+   Правило идёт ПОСЛЕ общего text-align: center, чтобы переопределить его
+   только для этих двух колонок. Остальные колонки (№, Ед.изм, hex, Physical)
+   остаются по центру. */
+.table-wrapper .modbus-grid thead tr:last-child th:nth-child(2),
+.table-wrapper .modbus-grid thead tr:last-child th:nth-child(3),
+.table-wrapper .modbus-grid #grid-data-rows td:nth-child(2),
+.table-wrapper .modbus-grid #grid-data-rows td:nth-child(3) {
+    text-align: left;
+}
