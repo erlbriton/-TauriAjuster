@@ -53,6 +53,14 @@ export async function readLoop(serial: ISerialPort, _parser: unknown, view: IOsc
     let errorEventSent = false;
     const TIMEOUT_THRESHOLD = 3;
 
+    // Watchdog для TCP: если 15 секунд подряд ни один батч не был получен
+    // (а минимум 3 таймаута уже накопилось) — считаем соединение мёртвым.
+    // Это ловит ситуацию физического обрыва Ethernet-кабеля, когда Windows
+    // не сразу уведомляет сокет об ошибке, а read() продолжает возвращать
+    // пустой ответ без ошибки.
+    let lastSuccessAt = Date.now();
+    const TCP_DEAD_MS = 15000;
+
     // Экспоненциальный backoff при таймаутах: если контроллер не отвечает,
     // увеличиваем паузу между итерациями. Без этого мы «флудим» 50 запросами
     // в секунду, что на многих промышленных устройствах включает временную
@@ -78,7 +86,7 @@ export async function readLoop(serial: ISerialPort, _parser: unknown, view: IOsc
             const sectionMode: 'RAM' | 'XRAM' =
                 (window as unknown as { osc?: { currentSectionMode?: 'RAM' | 'XRAM' } })
                     .osc?.currentSectionMode ?? 'RAM';
-            
+
             const iniConfig: IniConfig | null = stateObj.currentIniConfig;
             if (!iniConfig || !iniConfig.isValid) {
                 console.log('[readLoop] итерация: iniConfig пуст или невалиден — ждём 500 мс');
@@ -128,12 +136,12 @@ export async function readLoop(serial: ISerialPort, _parser: unknown, view: IOsc
                             mergedDataMap.set(startAddr + i, val);
                         }
                         // Если ранее была серия ошибок — сообщаем UI о восстановлении связи
-                        if (errorEventSent) {
+                                              if (errorEventSent) {
                             window.dispatchEvent(new CustomEvent('app:controller-responding'));
                         }
-                        // Успешный ответ — сбрасываем счётчик, разрешаем повторное событие
                         consecutiveTimeouts = 0;
                         errorEventSent = false;
+                        lastSuccessAt = Date.now();
                     } else {
                         // Таймаут или неполный ответ (executeTransaction вернул null без исключения)
                         consecutiveTimeouts++;
@@ -167,6 +175,33 @@ export async function readLoop(serial: ISerialPort, _parser: unknown, view: IOsc
                     detail: { consecutiveTimeouts },
                 }));
                 errorEventSent = true;
+            }
+
+            // ─── Watchdog для TCP ────────────────────────────────────────────────
+            // Ситуация: физический обрыв Ethernet-кабеля. Windows не сразу
+            // уведомляет сокет об ошибке, read() возвращает WouldBlock/пустоту
+            // без ошибки. Значит consecutiveTimeouts растёт, но notifyDisconnect
+            // никогда не вызывается — кнопка остаётся «1», авто-реконнект не
+            // стартует, графики стоят.
+            //
+            // Условие: TCP-транспорт + уже накопились таймауты + прошло
+            // TCP_DEAD_MS с последнего успешного батча. Тогда принудительно
+            // помечаем соединение мёртвым — это вызовет onDisconnect в порту,
+            // кнопка перейдёт в «E», запустится авто-реконнект.
+            if (
+                serial.transportKind === 'tcp' &&
+                consecutiveTimeouts >= TIMEOUT_THRESHOLD &&
+                Date.now() - lastSuccessAt > TCP_DEAD_MS
+            ) {
+                const maybe = serial as unknown as { notifyDisconnect?: () => void };
+                if (typeof maybe.notifyDisconnect === 'function') {
+                    console.warn(
+                        `[readLoop] TCP: ${TCP_DEAD_MS} мс без успешных ответов — ` +
+                        'считаем соединение мёртвым, сбрасываем isConnected',
+                    );
+                    maybe.notifyDisconnect();
+                    break; // выходим из while — onDisconnect уже остановил опрос
+                }
             }
 
             if (mergedDataMap.size > 0) {

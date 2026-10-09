@@ -183,8 +183,17 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
 
         // Запускаем readLoop, если осциллограф виден.
         const osc = window.osc;
-        if (osc && typeof osc.setConnectionStatus === 'function') {
-          osc.setConnectionStatus(true);
+        if (osc) {
+          if (typeof osc.setConnectionStatus === 'function') {
+            osc.setConnectionStatus(true);
+          }
+          // Обязательно размораживаем осциллограф: при обрыве связи
+          // сработало app:controller-not-responding → showFrozenState('').
+          // Без resumeFromFrozen() графики останутся стоять, хотя данные идут.
+          const oscAny = osc as unknown as { resumeFromFrozen?: () => void };
+          if (typeof oscAny.resumeFromFrozen === 'function') {
+            oscAny.resumeFromFrozen();
+          }
         }
         const oscContainerEl = document.getElementById('osc-container');
         const isOscVisible = oscContainerEl &&
@@ -385,8 +394,16 @@ export function initCommunicationSettingsUI(deps: CommunicationSettingsUIDeps): 
       // Отличие — используем currentPort (актуальный TCP-порт), а не
       // serial из deps, который относится к исходному COM-порту.
       const osc = window.osc;
-      if (osc && typeof osc.setConnectionStatus === 'function') {
-        osc.setConnectionStatus(true);
+      if (osc) {
+        if (typeof osc.setConnectionStatus === 'function') {
+          osc.setConnectionStatus(true);
+        }
+        // Размораживаем осциллограф при ручном переподключении —
+        // тот же случай, что и в авто-реконнекте.
+        const oscAny = osc as unknown as { resumeFromFrozen?: () => void };
+        if (typeof oscAny.resumeFromFrozen === 'function') {
+          oscAny.resumeFromFrozen();
+        }
       }
       const oscContainerEl = document.getElementById('osc-container');
       const isOscVisible = oscContainerEl &&
