@@ -193,3 +193,4 @@
 .cm-editor.cm-focused [class*="cm-selectionBackground"] {
     background-color: #7fb8e6 !important;   /* Цвет выделения, когда редактор В фокусе (обычно ярче) */
 }
+

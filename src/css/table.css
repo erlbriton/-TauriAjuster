@@ -320,3 +320,18 @@ td.cell-active div {
 .table-wrapper .modbus-grid #grid-data-rows td:nth-child(3) {
     text-align: left;
 }
+/* Стрелка ▼ у левого края ячейки "hex" группы "Контроллер".
+   Появляется только в незаписавшихся строках, если их ≥ 2 (см. copy-ops.ts).
+   Намекает пользователю: ниже есть ещё неуспешные параметры.
+   Снимается перед следующей попыткой копирования. */
+.copy-down-arrow {
+    position: absolute;
+    left: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #d00000cc;
+    font-size: 14px;
+    user-select: none;
+    font-weight: bold;
+    pointer-events: none;
+}
