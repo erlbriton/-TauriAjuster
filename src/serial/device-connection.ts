@@ -57,7 +57,12 @@ export async function executeDeviceConnection(
     }
 }
 
-export async function executeDeviceIdentification(serial: ISerialPort, comSelect: HTMLSelectElement | null, stateObj: AppState, baudSelect: HTMLSelectElement | null = null): Promise<void> {
+export async function executeDeviceIdentification(
+    serial: ISerialPort,
+    comSelect: HTMLSelectElement | null,
+    stateObj: AppState,
+    baudSelect: HTMLSelectElement | null = null,
+    commandByte: number = 0x11): Promise<void> {
     try {
         stateObj.isIdentifying = true;
         const baudRate = baudSelect ? parseInt(baudSelect.value, 10) || 115200 : 115200;
@@ -78,7 +83,7 @@ export async function executeDeviceIdentification(serial: ISerialPort, comSelect
         }
 
         showIdModal("Запрос ID устройства...");
-        const packet = new Uint8Array([stateObj.slaveAddress & 0xFF, 0x11, 0xC0, 0x2C]);
+        const packet = new Uint8Array([stateObj.slaveAddress & 0xFF, commandByte, 0xC0, 0x2C]);
         const checkComplete: CheckCompleteFn = (buf: Uint8Array) => {
             if (buf.length >= 3) {
                 const dataLength = buf[2];

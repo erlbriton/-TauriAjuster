@@ -88,7 +88,6 @@ export function initUI(deps: UiManagerDeps): void {
     executeDeviceConnection, executeDeviceIdentification, readLoop, showIdModal, updateDeviceRegisters
   } = deps;
   let isManualDisconnect = false;
-  const idBtn = document.getElementById("idBtn") as HTMLButtonElement | null;
   const connectBtn = document.getElementById("connectBtn") as HTMLButtonElement | null;
   const comSelect = document.getElementById("comSelect") as HTMLSelectElement | null;
   const baudSelect = document.getElementById("baudSelect") as HTMLSelectElement | null;
@@ -99,15 +98,19 @@ export function initUI(deps: UiManagerDeps): void {
   const menuToggleOsc = document.getElementById('menuToggleOsc') as HTMLElement | null;
   const menuViewRec = document.getElementById('menuViewRec') as HTMLElement | null;
   const refreshBtn = document.getElementById("refresh-btn") as HTMLButtonElement | null;
+
   const folderActionBtn = document.getElementById('folderActionBtn') as HTMLButtonElement | null;
   const folderArrowBtn = document.getElementById('folderArrowBtn') as HTMLButtonElement | null;
   const folderDropdown = document.getElementById('folderDropdown') as HTMLElement | null;
   const menuOpenFile = document.getElementById('menuOpenFile') as HTMLElement | null;
   const menuOpenFolder = document.getElementById('menuOpenFolder') as HTMLElement | null;
-  const idArrowBtn = document.getElementById('idArrowBtn') as HTMLElement | null;
-  const icmBtn = document.getElementById('icm') as HTMLElement | null;
-  const dexsBtn = document.getElementById('dexs') as HTMLElement | null;
+
+  const idBtn = document.getElementById('idBtn') as HTMLButtonElement | null;
+  const idArrowBtn = document.getElementById('idArrowBtn') as HTMLButtonElement | null;
   const idDropdown = document.getElementById('idDropdown') as HTMLElement | null;
+  const dexsBtn = document.getElementById('dexs') as HTMLElement | null;
+  const icmBtn = document.getElementById('icm') as HTMLElement | null;
+
 
     // --- Инициализация модуля управления COM-портами ---
   // Делегируем логику работы с портами, кнопкой ID и обработкой отключения
@@ -395,6 +398,8 @@ export function initUI(deps: UiManagerDeps): void {
     toggleOscDropdown?.classList.remove('show');
     idDropdown?.classList.remove('show');
   });
+
+
 
   // Стрелочка и выпадающее меню с двумя пунктами ("DExS" и  "iCM"
 if (idArrowBtn) idArrowBtn.addEventListener('click', (e) => {
