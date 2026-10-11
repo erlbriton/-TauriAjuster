@@ -63,7 +63,17 @@
           </select>
 
           <button id="connectBtn" class="action-btn">подключиться</button>
-          <button id="idBtn" class="action-btn" title="Подключить com порт">ID</button>
+
+          <div class="split-btn-group">
+            <button id="idBtn" class="split-btn-main action-btn" title="Прочитать строку ID контроллера">ID</button>
+            <div class="split-btn-divider"></div>
+            <button id="idArrowBtn" class="split-btn-arrow" title="Меню ID">▼</button>
+            <div id="idDropdown" class="split-dropdown-menu">
+              <div class="split-dropdown-item" id="dexs">DExS</div>
+              <div class="split-dropdown-item" id="icm">iCM</div>
+            </div>
+          </div>
+
           <div class="split-btn-group" id="treeSearchSplit">
     <button class="split-btn-main tree-search-btn" id="treeSearchMainBtn" title="Поиск места установки">?</button>
     <div class="split-btn-divider"></div>

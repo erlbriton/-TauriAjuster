@@ -104,6 +104,10 @@ export function initUI(deps: UiManagerDeps): void {
   const folderDropdown = document.getElementById('folderDropdown') as HTMLElement | null;
   const menuOpenFile = document.getElementById('menuOpenFile') as HTMLElement | null;
   const menuOpenFolder = document.getElementById('menuOpenFolder') as HTMLElement | null;
+  const idArrowBtn = document.getElementById('idArrowBtn') as HTMLElement | null;
+  const icmBtn = document.getElementById('icm') as HTMLElement | null;
+  const dexsBtn = document.getElementById('dexs') as HTMLElement | null;
+  const idDropdown = document.getElementById('idDropdown') as HTMLElement | null;
 
     // --- Инициализация модуля управления COM-портами ---
   // Делегируем логику работы с портами, кнопкой ID и обработкой отключения
@@ -126,7 +130,7 @@ export function initUI(deps: UiManagerDeps): void {
       appState.isPolling = true;
       readLoop(serial, parser, view, buffers, appState);
     }
-  }; // <--- ДОБАВИТЬ ЭТУ ЗАКРЫВАЮЩУЮ СКОБКУ И ТОЧКУ С ЗАПЯТОЙ
+  };
 
   initSerialPortUI({
     serial,
@@ -363,25 +367,25 @@ export function initUI(deps: UiManagerDeps): void {
     if (folderActionBtn) {
     folderActionBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      await openIniFileTauri(appState); // <--- Новая функция
+      await openIniFileTauri(appState);
     });
   }
 
   if (menuOpenFile) {
     menuOpenFile.addEventListener('click', async () => {
-      await openIniFileTauri(appState); // <--- Новая функция
+      await openIniFileTauri(appState);
       folderDropdown?.classList.remove('show');
     });
   }
 
   if (menuOpenFolder) {
     menuOpenFolder.addEventListener('click', async () => {
-      await openIniFolderTauri(appState); // <--- Новая функция
+      await openIniFolderTauri(appState);
       folderDropdown?.classList.remove('show');
     });
   }
 
-    // Стрелочка и выпадающее меню с двумя пунктами ("Открыть файл",
+  // Стрелочка и выпадающее меню с двумя пунктами ("Открыть файл",
   // "Открыть папку") показываются на всех платформах. В нативной версии
   // Windows открытие папки тоже реализовано (через Rust-команду
   // open_file_location), поэтому скрывать пункт больше не нужно.
@@ -389,7 +393,14 @@ export function initUI(deps: UiManagerDeps): void {
     document.addEventListener('click', () => {
     folderDropdown?.classList.remove('show');
     toggleOscDropdown?.classList.remove('show');
+    idDropdown?.classList.remove('show');
   });
+
+  // Стрелочка и выпадающее меню с двумя пунктами ("DExS" и  "iCM"
+if (idArrowBtn) idArrowBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  idDropdown?.classList.toggle('show');
+});
 
     // --- Инициализация модуля настроек связи ---
   // Делегируем логику выбора скорости, режима BUS, адреса и глобальных событий.

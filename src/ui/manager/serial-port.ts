@@ -282,16 +282,6 @@ export function initSerialPortUI(deps: SerialPortUIDeps): void {
 
   if (idBtn) {
     idBtn.addEventListener("click", async () => {
-      // Если порт подключён — отключаем (старая логика кнопки ID была такой, но мы изменили на "только запрос ID")
-      // Согласно новым требованиям: кнопка ID только шлёт запрос. Отключение — через кнопку "Подключить" или автоматически при ошибке.
-      /*
-      if (serial.isConnected) {
-        await disconnectPort();
-        updateIdButtonState(serial.isConnected);
-        return;
-      }
-      */
-
       // Новая логика: если не подключён — подключаем, потом шлём ID
       if (!serial.isConnected) {
         try {
@@ -312,6 +302,5 @@ export function initSerialPortUI(deps: SerialPortUIDeps): void {
       await executeDeviceIdentification(serial, comSelect, appState, baudSelect);
     });
   }
-
   console.log("[SerialPortUI] Инициализирован.");
 }
