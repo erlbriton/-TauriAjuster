@@ -22,6 +22,10 @@ interface SerialPortUIDeps {
   comSelect: HTMLSelectElement | null;
   baudSelect: HTMLSelectElement | null;
   idBtn: HTMLButtonElement | null;
+  idArrowBtn: HTMLButtonElement | null;
+  idDropdown: HTMLElement | null;
+  dexsBtn: HTMLElement | null;
+  icmBtn: HTMLElement | null;
   executeDeviceConnection: (
     serial: ISerialPort,
     select: HTMLSelectElement | null,
@@ -31,7 +35,8 @@ interface SerialPortUIDeps {
     serial: ISerialPort,
     select: HTMLSelectElement | null,
     state: AppState,
-    baudSelect?: HTMLSelectElement | null
+    baudSelect?: HTMLSelectElement | null,
+    commandByte?: number,
   ) => Promise<void>;
   restoreConnection: () => void;
 }
@@ -46,6 +51,10 @@ export function initSerialPortUI(deps: SerialPortUIDeps): void {
     comSelect,
     baudSelect,
     idBtn,
+    idArrowBtn,
+    idDropdown,
+    dexsBtn,
+    icmBtn,
     executeDeviceConnection,
     executeDeviceIdentification,
     restoreConnection
@@ -259,6 +268,7 @@ export function initSerialPortUI(deps: SerialPortUIDeps): void {
     });
   }
 
+  
   // --- КНОПКА ID ---
   // Синхронизирует состояние кнопки (текст всегда "ID")
   const updateIdButtonState = (_connected: boolean): void => {
@@ -302,6 +312,30 @@ export function initSerialPortUI(deps: SerialPortUIDeps): void {
       }
       // Теперь порт подключён — шлём запрос ID
       await executeDeviceIdentification(serial, comSelect, appState, baudSelect);
+    });
+  }
+
+  // Стрелочка и выпадающее меню с двумя пунктами ("DExS" и  "iCM"
+if (idArrowBtn) idArrowBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  idDropdown?.classList.toggle('show');
+});
+document.addEventListener("click", () => {
+    idDropdown?.classList.remove("show");
+  });
+// Пункт меню DExS
+if (dexsBtn) {
+    dexsBtn.addEventListener('click', async () => {
+      await executeDeviceIdentification(serial, comSelect, appState, baudSelect);
+      idDropdown?.classList.remove('show');
+    });
+  }
+
+  // Пункт меню iCM
+if (icmBtn) {
+    icmBtn.addEventListener('click', async () => {
+      await executeDeviceIdentification(serial, comSelect, appState, baudSelect, 0x12);
+      idDropdown?.classList.remove('show');
     });
   }
   console.log("[SerialPortUI] Инициализирован.");

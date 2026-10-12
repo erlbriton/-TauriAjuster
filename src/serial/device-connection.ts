@@ -5,6 +5,7 @@
 import { identifyUsbChip } from './usb.js';
 import { showIdModal, updateIdBanner, closeIdModal } from '../ui/ui.js';
 import { serialManager } from './serial-manager.js';
+import { calculateCRC } from './modbus-crc.js';
 import type { CheckCompleteFn } from './serial-manager.js';
 import type { ISerialPort } from './ISerialPort.js';
 import type { AppState } from '../core/app-state.js';
@@ -64,52 +65,78 @@ export async function executeDeviceIdentification(
     baudSelect: HTMLSelectElement | null = null,
     commandByte: number = 0x11): Promise<void> {
     try {
-        stateObj.isIdentifying = true;
-        const baudRate = baudSelect ? parseInt(baudSelect.value, 10) || 115200 : 115200;
+      //Собрать «тело» пакета — байты, для которых считается CRC. Это первые два байта:
+      const body = new Uint8Array([stateObj.slaveAddress & 0xff, commandByte]);
+      //Посчитать CRC:
+      const crc = calculateCRC(body);
+      //Разложить CRC на два байта — младший и старший:
+      const crcLow = crc & 0xff;
+      const crcHigh = (crc >> 8) & 0xff;
+      //Собрать итоговый пакет: адрес + команда + CRC (младший, старший)
+      const packet = new Uint8Array([
+        stateObj.slaveAddress & 0xff,
+        commandByte,
+        crcLow,
+        crcHigh,
+      ]);
 
-        if (!serial.isConnected) {
-            await serial.connect(baudRate);
-            serialManager.init(serial);
-            if ((window as any).osc) {
-                (window as any).osc.setSerialPort(serial);
-            }
-            updateComInterfaceName(serial, comSelect);
-            await new Promise((r) => setTimeout(r, 500));
-        } else {
-            serialManager.init(serial);
-            if ((window as any).osc) {
-                (window as any).osc.setSerialPort(serial);
-            }
-        }
+      stateObj.isIdentifying = true;
+      const baudRate = baudSelect
+        ? parseInt(baudSelect.value, 10) || 115200
+        : 115200;
 
-        showIdModal("Запрос ID устройства...");
-        const packet = new Uint8Array([stateObj.slaveAddress & 0xFF, commandByte, 0xC0, 0x2C]);
-        const checkComplete: CheckCompleteFn = (buf: Uint8Array) => {
-            if (buf.length >= 3) {
-                const dataLength = buf[2];
-                return buf.length >= 3 + dataLength + 2 || buf.length >= 52;
-            }
-            return false;
-        };
-        const reply = await serialManager.executeTransaction(packet, checkComplete, 1500);
-        if (reply && reply.length >= 3) {
-            const dataLength = reply[2];
-            let idText = "";
-            for (let i = 3; i < Math.min(3 + dataLength, reply.length - 2); i++) {
-                if (reply[i] >= 32) idText += String.fromCharCode(reply[i]);
-            }
-            updateIdBanner(idText.trim());
-            closeIdModal();
-        } else {
-            showIdModal("Ошибка: Нет ответа от устройства");
+      if (!serial.isConnected) {
+        await serial.connect(baudRate);
+        serialManager.init(serial);
+        if ((window as any).osc) {
+          (window as any).osc.setSerialPort(serial);
         }
+        updateComInterfaceName(serial, comSelect);
+        await new Promise((r) => setTimeout(r, 500));
+      } else {
+        serialManager.init(serial);
+        if ((window as any).osc) {
+          (window as any).osc.setSerialPort(serial);
+        }
+      }
+
+      showIdModal("Запрос ID устройства...");
+    //   const packet = new Uint8Array([
+    //     stateObj.slaveAddress & 0xff,
+    //     commandByte,
+    //     0xc0,
+    //     0x2c,
+    //   ]);
+      const checkComplete: CheckCompleteFn = (buf: Uint8Array) => {
+        if (buf.length >= 3) {
+          const dataLength = buf[2];
+          return buf.length >= 3 + dataLength + 2 || buf.length >= 52;
+        }
+        return false;
+      };
+      const reply = await serialManager.executeTransaction(
+        packet,
+        checkComplete,
+        1500,
+      );
+      if (reply && reply.length >= 3) {
+        const dataLength = reply[2];
+        let idText = "";
+        for (let i = 3; i < Math.min(3 + dataLength, reply.length - 2); i++) {
+          if (reply[i] >= 32) idText += String.fromCharCode(reply[i]);
+        }
+        updateIdBanner(idText.trim());
+        closeIdModal();
+      } else {
+        showIdModal("Ошибка: Нет ответа от устройства");
+      }
     } catch (error: unknown) {
-        if (error instanceof Error && error.name === 'PortCancelledError') {
-            return;
-        }
-        const message = error instanceof Error ? error.message : String(error);
-        showIdModal("Ошибка: " + message);
+      if (error instanceof Error && error.name === "PortCancelledError") {
+        return;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      showIdModal("Ошибка: " + message);
     } finally {
-        stateObj.isIdentifying = false;
+      stateObj.isIdentifying = false;
     }
 }

@@ -141,6 +141,10 @@ export function initUI(deps: UiManagerDeps): void {
     comSelect,
     baudSelect,
     idBtn,
+    idArrowBtn,
+    idDropdown,
+    dexsBtn,
+    icmBtn,
     executeDeviceConnection,
     executeDeviceIdentification,
     restoreConnection
@@ -392,21 +396,15 @@ export function initUI(deps: UiManagerDeps): void {
   // "Открыть папку") показываются на всех платформах. В нативной версии
   // Windows открытие папки тоже реализовано (через Rust-команду
   // open_file_location), поэтому скрывать пункт больше не нужно.
-  if (folderArrowBtn) folderArrowBtn.addEventListener('click', (e) => { e.stopPropagation(); folderDropdown?.classList.toggle('show'); });
-    document.addEventListener('click', () => {
-    folderDropdown?.classList.remove('show');
-    toggleOscDropdown?.classList.remove('show');
-    idDropdown?.classList.remove('show');
+  if (folderArrowBtn)
+    folderArrowBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      folderDropdown?.classList.toggle("show");
+    });
+  document.addEventListener("click", () => {
+    folderDropdown?.classList.remove("show");
+    toggleOscDropdown?.classList.remove("show");
   });
-
-
-
-  // Стрелочка и выпадающее меню с двумя пунктами ("DExS" и  "iCM"
-if (idArrowBtn) idArrowBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  idDropdown?.classList.toggle('show');
-});
-
     // --- Инициализация модуля настроек связи ---
   // Делегируем логику выбора скорости, режима BUS, адреса и глобальных событий.
   

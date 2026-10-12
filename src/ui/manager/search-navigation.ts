@@ -183,7 +183,8 @@ export function initSearchNavigationUI(deps: SearchNavigationUIDeps): void {
     const action = target.getAttribute('data-action');
     if (!action) return;
 
-    treeSearchMenu.classList.remove('show');
+   // treeSearchMenu.;
+    treeSearchMenu?.classList.remove('show');
 
     if (action === 'location') {
       openTreeSearchOverlay();
@@ -206,7 +207,8 @@ export function initSearchNavigationUI(deps: SearchNavigationUIDeps): void {
   document.addEventListener('click', (e) => {
     if (treeSearchMenu && treeSearchMenu.classList.contains('show')) {
       if (treeSearchSplit && !treeSearchSplit.contains(e.target as Node)) {
-        treeSearchMenu.classList.remove('show');
+       // treeSearchMenu.;
+        treeSearchMenu?.classList.remove('show');
       }
     }
   });
