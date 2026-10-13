@@ -14,6 +14,7 @@ import type { ISerialPort } from '../../serial/ISerialPort.js';
 import type { AppState } from '../../core/app-state.js';
 import { PortCancelledError } from '../../serial/serial.js';
 import { updateIdBanner, showCompactError, showIdModal } from '../ui.js'; // Импорт утилит UI
+import { serialManager } from '../../serial/serial-manager.js';
 
 // Типизация зависимостей для этого модуля
 interface SerialPortUIDeps {
@@ -293,11 +294,12 @@ export function initSerialPortUI(deps: SerialPortUIDeps): void {
   };
 
   if (idBtn) {
-    idBtn.addEventListener("click", async () => {
-      // Новая логика: если не подключён — подключаем, потом шлём ID
-      if (!serial.isConnected) {
-        try {
-          await executeDeviceConnection(serial, comSelect, baudSelect);
+  idBtn.addEventListener("click", async () => {
+    const serial = serialManager.serial;   // ← одна новая строка
+    if (!serial) return;
+    if (!serial.isConnected) {
+      try {
+        await executeDeviceConnection(serial, comSelect, baudSelect);
           const osc = window.osc;
           if (osc && typeof osc.setSerialPort === 'function') {
             osc.setSerialPort(serial);

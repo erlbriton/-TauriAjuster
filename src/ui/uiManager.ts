@@ -33,6 +33,7 @@ import { initDeviceManagementUI } from './manager/device-management.js';
 import { initOscilloscopeUI } from './manager/oscilloscope-ui.js';
 import { initSearchNavigationUI } from './manager/search-navigation.js';
 import { initCommunicationSettingsUI } from './manager/communication-settings.js';
+import { serialManager } from '../serial/serial-manager.js';
 
 /** Буфер данных канала (типизирован явно, без any) */
 export interface ChannelBuffer {

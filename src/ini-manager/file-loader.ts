@@ -8,6 +8,7 @@ import { renderModbusTable } from '../ui/tree.js';
 import { IniParser as CoreIniParser, IniConfig, iniParamsToChannelConfigs } from '../core/ini/index.js';
 import type { AppState } from '../core/app-state.js';
 import { decodeTextBuffer } from './textFileReader.js';
+import { serialManager } from '../serial/serial-manager.js';
 
 // ─── Хранилище файлов вынесено в отдельный модуль (file-store.ts) ──────────
 // Импортируем нужные символы и реэкспортируем их, чтобы внешние модули

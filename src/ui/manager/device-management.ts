@@ -24,6 +24,7 @@ import { showFwUpdateModal } from '../fw-update-modal.js';
 import { showNewDeviceModal, setNewDeviceAddToLoaded } from '../new-device-ui.js';
 import { processSingleFileContent } from '../../ini-manager/file-loader.js';
 import { PortCancelledError } from '../../serial/serial.js';
+import { serialManager } from '../../serial/serial-manager.js';
 
 interface DeviceManagementUIDeps {
   serial: ISerialPort;
@@ -186,7 +187,8 @@ export function initDeviceManagementUI(deps: DeviceManagementUIDeps): void {
 
   // --- ОБНОВЛЕНИЕ ТАБЛИЦЫ (FC03) ---
   const performRefresh = async (notifyIfDisconnected: boolean): Promise<void> => {
-    if (!serial?.isConnected) {
+    const port = serialManager.serial;
+    if (!port || !port.isConnected) {
       if (notifyIfDisconnected) showIdModal("Устройство не подключено!");
       return;
     }
@@ -197,14 +199,14 @@ export function initDeviceManagementUI(deps: DeviceManagementUIDeps): void {
     const wasPolling = appState.isPolling;
 
     try {
-      const success = await updateDeviceRegisters(serial, appState.slaveAddress, appState);
+      const success = await updateDeviceRegisters(port, appState.slaveAddress, appState);
 
       if (success) {
         if (wasPolling) {
           console.log('[UI] Восстанавливаем опрос после обновления');
           appState.isLoopRunning = false;
           appState.isPolling = true;
-          readLoop(serial, parser, view, buffers, appState);
+          readLoop(port, parser, view, buffers, appState);
         }
       } else {
         console.warn('[UI] updateDeviceRegisters вернул false — связь не удалась');
