@@ -326,7 +326,11 @@ document.addEventListener("click", () => {
 // Пункт меню DExS
 if (dexsBtn) {
     dexsBtn.addEventListener('click', async () => {
-      await executeDeviceIdentification(serial, comSelect, appState, baudSelect);
+      await executeDeviceIdentification(
+        serial, 
+        comSelect, 
+        appState, 
+        baudSelect);
       idDropdown?.classList.remove('show');
     });
   }
