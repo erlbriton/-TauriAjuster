@@ -114,6 +114,7 @@ export async function executeDeviceIdentification(
         }
         return false;
       };
+      console.log('[execId] packet =', Array.from(packet), ', serialManager.serial =', serialManager.serial);
       const reply = await serialManager.executeTransaction(
         packet,
         checkComplete,

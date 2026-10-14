@@ -295,6 +295,7 @@ export function initSerialPortUI(deps: SerialPortUIDeps): void {
 
   if (idBtn) {
   idBtn.addEventListener("click", async () => {
+    console.log('[ID] CLICK! serialManager.serial =', serialManager.serial);
     const serial = serialManager.serial;   // ← одна новая строка
     if (!serial) return;
     if (!serial.isConnected) {

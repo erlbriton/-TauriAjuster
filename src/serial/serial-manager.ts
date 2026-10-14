@@ -108,6 +108,7 @@ export class SerialManager {
             // полуоткрытый сокет, зависший драйвер), JS будет ждать вечно.
             // Promise.race с timeoutMs + 2000 страхует от этого.
             const invokeTimeoutMs = timeoutMs + 2000;
+            console.log('[tx] about to invoke:', commandName, '| transportKind =', port.transportKind, '| data =', Array.from(packet));
             const response = await Promise.race([
                 invoke<number[]>(commandName, { data: dataArray, timeoutMs }),
                 new Promise<never>((_, reject) =>
