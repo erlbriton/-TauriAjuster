@@ -329,11 +329,9 @@ document.addEventListener("click", () => {
 // Пункт меню DExS
 if (dexsBtn) {
     dexsBtn.addEventListener('click', async () => {
-      await executeDeviceIdentification(
-        serial, 
-        comSelect, 
-        appState, 
-        baudSelect);
+      const serial = serialManager.serial;
+      if (!serial) return;
+      await executeDeviceIdentification(serial, comSelect, appState, baudSelect);
       idDropdown?.classList.remove('show');
     });
   }
@@ -341,6 +339,8 @@ if (dexsBtn) {
   // Пункт меню iCM
 if (icmBtn) {
     icmBtn.addEventListener('click', async () => {
+      const serial = serialManager.serial;
+      if (!serial) return;
       await executeDeviceIdentification(serial, comSelect, appState, baudSelect, 0x12);
       idDropdown?.classList.remove('show');
     });
