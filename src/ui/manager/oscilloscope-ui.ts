@@ -10,6 +10,7 @@ import type { ISerialPort } from '../../serial/ISerialPort.js';
 import type { AppState } from '../../core/app-state.js';
 import type { IOscilloscopeApi } from '../../core/osc-api.js';
 import type { ChannelBuffer } from '../uiManager.js';
+import { serialManager } from '../../serial/serial-manager.js';
 
 interface OscilloscopeUIDeps {
   serial: ISerialPort;
@@ -86,15 +87,22 @@ export function initOscilloscopeUI(deps: OscilloscopeUIDeps): void {
             await osc.loadIniContent(appState.currentIniContent);
           }
           
+          // Берём актуальный порт (RTU или TCP) — тот же, что использует
+          // остальное приложение через serialManager. Это нужно, чтобы при
+          // переключении транспорта осциллограф видел правильное состояние.
+          const currentSerial = serialManager.serial;
+          
           if (typeof osc.setConnectionStatus === 'function') {
             osc.setConnectionStatus(
-              serial.isConnected,
-              serial.isConnected ? undefined : 'Нет связи с устройством.'
+              currentSerial?.isConnected ?? false,
+              currentSerial?.isConnected ? undefined : 'Нет связи с устройством.'
             );
           }
           
           // Запускаем цикл чтения данных для осциллографа
-          readLoop(serial, parser, osc, buffers, appState);
+          if (currentSerial) {
+            readLoop(currentSerial, parser, osc, buffers, appState);
+          }
           
         } catch (err) {
           console.error('[OscilloscopeUI] Ошибка инициализации осциллографа:', err);
