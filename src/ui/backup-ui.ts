@@ -1,7 +1,7 @@
 // src/ui/backup-ui.ts
 /**
  * Окно "Создать резерв для устройства...": создание записи в базе с
- * параметрами, идентичными существующему устройству (шаблону).
+ * параметрами, идентичными существующему устройству (шаблоном).
  *
  * Сейчас: показ окна, заполнение данных, выбор строки-шаблона.
  * Алгоритм "Применить" — вынесен в backup-apply.ts.
@@ -28,7 +28,57 @@ export function setBackupLoadFn(fn: BackupLoadFn): void {
     loadFn = fn;
 }
 
+// ─── Состояние перетаскивания окна "Создать резерв для устройства..." ──────────
+let backupDragOffsetX = 0;
+let backupDragOffsetY = 0;
+let backupIsDragging = false;
+let backupDragStartX = 0;
+let backupDragStartY = 0;
+
+/** Применяет текущее смещение к окну через transform. */
+function applyBackupDragTransform(): void {
+    const win = document.querySelector<HTMLElement>('.backup-window');
+    if (!win) return;
+    if (backupDragOffsetX === 0 && backupDragOffsetY === 0) {
+        win.style.transform = '';
+    } else {
+        win.style.transform = `translate(${backupDragOffsetX}px, ${backupDragOffsetY}px)`;
+    }
+}
+
+/** Инициализирует перетаскивание окна за заголовок. */
+function setupBackupDragging(): void {
+    const header = document.querySelector<HTMLElement>('#backupOverlay .backup-header');
+    const win = document.querySelector<HTMLElement>('.backup-window');
+    if (!header || !win) return;
+
+    header.addEventListener('mousedown', (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('button, input, select, a, textarea')) return;
+
+        backupIsDragging = true;
+        backupDragStartX = e.clientX - backupDragOffsetX;
+        backupDragStartY = e.clientY - backupDragOffsetY;
+        document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', (e: MouseEvent) => {
+        if (!backupIsDragging) return;
+        backupDragOffsetX = e.clientX - backupDragStartX;
+        backupDragOffsetY = e.clientY - backupDragStartY;
+        applyBackupDragTransform();
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (!backupIsDragging) return;
+        backupIsDragging = false;
+        document.body.style.userSelect = '';
+    });
+}
+
 export function initBackupUI(): void {
+    setupBackupDragging();
+
     document.getElementById('backupCloseBtn')?.addEventListener('click', () => {
         hideBackupWindow();
     });
@@ -68,6 +118,11 @@ let currentSource = {
 export function showBackupWindow(source?: BackupWindowSource): void {
     const overlay = document.getElementById('backupOverlay');
     if (!overlay) return;
+
+    // Сбрасываем позицию окна в центр при каждом открытии
+    backupDragOffsetX = 0;
+    backupDragOffsetY = 0;
+    applyBackupDragTransform();
 
     const mechInputId = source?.mechInputId ?? 'newDeviceMechInput';
     const locInputId = source?.locInputId ?? 'newDeviceLocInput';

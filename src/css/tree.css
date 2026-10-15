@@ -4,7 +4,7 @@
 
 /* Левая навигационная колонка */
 .left-sidebar-column {
-    width: 220px; 
+    width: 220px;
     height: 100%;
     background-color: #ffffff;
     box-sizing: border-box;
@@ -25,7 +25,7 @@
     display: flex;
     align-items: center;
     font-size: 14px;       /* Плотный шрифт для компактного отображения */
-    font-weight: 600;      
+    font-weight: 600;
     color: #000000;        /* ДОБАВЛЕНО: Явный черный цвет текста */
     cursor: pointer;
     margin: 0;
@@ -34,26 +34,26 @@
 
 /* Список вложенных ID (схлопывание стандартных отступов списков) */
 .tree-id-list {
-    margin: 0;             
+    margin: 0;
     padding-top: 0px;      /* Убраны все лишние зазоры сверху и снизу */
     padding-bottom: 0px;
     padding-left: 12px;    /* Компактный отступ для визуальной иерархии вложенности */
-    list-style: none;      
+    list-style: none;
 }
 
 /* Конкретная нода устройства в дереве */
 .tree-id-item {
-    height: 16px;          
+    height: 16px;
     display: flex;
     align-items: center;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     box-sizing: border-box;
-    font-size: 14px;       
+    font-size: 14px;
     font-weight: normal;
     color: #000000;        /* ДОБАВЛЕНО: Явный черный цвет текста */
-    line-height: 16px;     
+    line-height: 16px;
     margin: 0;
     padding: 0;
     cursor: pointer;
@@ -76,17 +76,17 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    
+
     width: 9px;                /* Строгий маленький квадрат */
     height: 9px;
     border: 1px solid #808080; /* Серая рамка окна */
     background-color: #ffffff; /* Белый фон внутри квадрата */
-    
+
     font-size: 9px;            /* Размер под мелкий квадрат */
     font-family: monospace;    /* Чтобы плюс/минус встали ровно по центру */
     line-height: 1;
     color: #000000;
-    
+
     margin-right: 6px;
     flex-shrink: 0;
     box-sizing: border-box;
@@ -104,13 +104,13 @@
 
 /* Конечные узлы устройств (листья) — полностью убираем маркер, как на скриншоте */
 .tree-id-item.is-leaf::before {
-    display: none;             
+    display: none;
 }
 
 /* Дополнительный отступ для текста конечных устройств, чтобы компенсировать */
 /* отсутствие квадратика и красиво выстроить иерархию */
 .tree-id-item.is-leaf {
-    padding-left: 15px;        
+    padding-left: 15px;
 }
 
 /* ДОБАВЛЕНО: Голубая прозрачная полоска-индикатор для активного ini-файла */
@@ -171,25 +171,46 @@
 .context-menu .context-menu-item.ctx-hidden {
     display: none !important;
 }
+
 /* Модальное окно изменения ПО */
 /* ── Модальное окно "Обновление программы устройства" ── */
 #fwUpdateOverlay {
-  position: fixed; inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 1000;
+  position: fixed !important;
+  inset: 0 !important;
+  background-color: transparent !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 11800 !important;
+  pointer-events: none !important;
 }
-#fwUpdateOverlay.hidden { display: none; }
+#fwUpdateOverlay.hidden { display: none !important; }
 
 .fw-update-modal {
-  width: 660px; max-width: 95vw; max-height: 90vh; overflow: auto;
-  background: #f0f0f0; color: #222;
-  border: 1px solid #777; box-shadow: 0 10px 35px rgba(0,0,0,.45);
-  font-family: system-ui, "Segoe UI", sans-serif; font-size: 13px;
+  width: 660px !important;
+  max-width: 95vw !important;
+  max-height: 90vh !important;
+  overflow: auto !important;
+  background: #f0f0f0 !important;
+  color: #222 !important;
+  border: 1px solid #777 !important;
+  box-shadow: 0 10px 35px rgba(0,0,0,.45) !important;
+  font-family: system-ui, "Segoe UI", sans-serif !important;
+  font-size: 13px !important;
+  pointer-events: auto !important;
 }
 .fw-update-header {
-  display: flex; justify-content: space-between; align-items: center;
-  background: #3e5f5f; color: #fff; padding: 6px 10px; font-weight: 600;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  background: #3e5f5f !important;
+  color: #fff !important;
+  padding: 6px 10px !important;
+  font-weight: 600 !important;
+  cursor: grab !important;
+}
+.fw-update-header:active {
+  cursor: grabbing !important;
 }
 .fw-update-close { background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; }
 .fw-update-body { padding: 12px 14px; }

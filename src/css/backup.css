@@ -3,10 +3,11 @@
     position: fixed !important;
     inset: 0 !important;
     z-index: 11900 !important;
-    background: rgba(0, 0, 0, 0.45) !important;
+    background-color: transparent !important; /* Убираем затемнение фона */
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
+    pointer-events: none !important;          /* Пропускаем клики и выделение сквозь оверлей на таблицу */
 }
 
 .backup-overlay.hidden {
@@ -25,6 +26,7 @@
     display: flex !important;
     flex-direction: column !important;
     color: #333333 !important;
+    pointer-events: auto !important;          /* Возвращаем кликабельность и взаимодействие самому окну */
 }
 
 .backup-header {

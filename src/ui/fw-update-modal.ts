@@ -2,7 +2,6 @@
 // Модальное окно "Обновление программы устройства": показывается, когда
 // ID устройства совпал (ID=...), но остальная часть ID-строки отличается
 // от записанной в INI (другая версия/модель ПО).
-// Действия кнопок подключаются следующим шагом — сейчас заглушки.
 
 import { showBackupWindow } from './backup-ui.js';
 import { refreshTemplateSelects, handleAddTemplate } from './new-device-ui.js';
@@ -26,7 +25,60 @@ export interface FwUpdateInfo {
     oldFileName?: string;
 }
 
+// ─── Состояние перетаскивания окна "Обновление программы устройства" ──────────
+let fwDragOffsetX = 0;
+let fwDragOffsetY = 0;
+let fwIsDragging = false;
+let fwDragStartX = 0;
+let fwDragStartY = 0;
+
+/** Применяет текущее смещение к окну через transform. */
+function applyFwDragTransform(): void {
+    const win = document.querySelector<HTMLElement>('.fw-update-modal');
+    if (!win) return;
+    if (fwDragOffsetX === 0 && fwDragOffsetY === 0) {
+        win.style.transform = '';
+    } else {
+        win.style.transform = `translate(${fwDragOffsetX}px, ${fwDragOffsetY}px)`;
+    }
+}
+
+/** Инициализирует перетаскивание окна за заголовок. */
+function setupFwUpdateDragging(): void {
+    const header = document.querySelector<HTMLElement>('#fwUpdateOverlay .fw-update-header');
+    const win = document.querySelector<HTMLElement>('.fw-update-modal');
+    if (!header || !win) {
+        console.warn('[FW-UPDATE] Заголовок или окно (.fw-update-modal) не найдены для перетаскивания');
+        return;
+    }
+
+    header.addEventListener('mousedown', (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('button, input, select, a, textarea')) return;
+
+        fwIsDragging = true;
+        fwDragStartX = e.clientX - fwDragOffsetX;
+        fwDragStartY = e.clientY - fwDragOffsetY;
+        document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', (e: MouseEvent) => {
+        if (!fwIsDragging) return;
+        fwDragOffsetX = e.clientX - fwDragStartX;
+        fwDragOffsetY = e.clientY - fwDragStartY;
+        applyFwDragTransform();
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (!fwIsDragging) return;
+        fwIsDragging = false;
+        document.body.style.userSelect = '';
+    });
+}
+
 export function initFwUpdateModal(): void {
+    setupFwUpdateDragging();
+
     const overlay = document.getElementById('fwUpdateOverlay');
     if (!overlay) return;
 
@@ -41,7 +93,7 @@ export function initFwUpdateModal(): void {
         if (!overlay.classList.contains('hidden') && e.key === 'Escape') hide();
     });
 
-       // "Создать резервную копию устройства" — открываем окно резерва,
+    // "Создать резервную копию устройства" — открываем окно резерва,
     // берём Механизм/Расположение из полей этого окна, и при применении
     // закрываем именно это окно (а не "Новое устройство").
     document.getElementById('fwUpdateCreateCopyBtn')?.addEventListener('click', () => {
@@ -84,6 +136,11 @@ export function initFwUpdateModal(): void {
 export function showFwUpdateModal(info: FwUpdateInfo): void {
     const overlay = document.getElementById('fwUpdateOverlay');
     if (!overlay) return;
+
+    // Сбрасываем позицию окна — при каждом открытии оно по центру.
+    fwDragOffsetX = 0;
+    fwDragOffsetY = 0;
+    applyFwDragTransform();
 
     currentInfo = info;
     console.log('[FW-UPDATE] Показываем окно с данными:', info);
