@@ -40,6 +40,54 @@ export function getAddToLoadedFn(): AddToLoadedFn | null {
     return addToLoadedFn;
 }
 
+// ─── Состояние перетаскивания окна "Новое устройство" ──────────
+let newDeviceDragOffsetX = 0;
+let newDeviceDragOffsetY = 0;
+let newDeviceIsDragging = false;
+let newDeviceDragStartX = 0;
+let newDeviceDragStartY = 0;
+
+/** Применяет текущее смещение к окну через transform. */
+function applyNewDeviceDragTransform(): void {
+    const win = document.querySelector<HTMLElement>('.new-device-window');
+    if (!win) return;
+    if (newDeviceDragOffsetX === 0 && newDeviceDragOffsetY === 0) {
+        win.style.transform = '';
+    } else {
+        win.style.transform = `translate(${newDeviceDragOffsetX}px, ${newDeviceDragOffsetY}px)`;
+    }
+}
+
+/** Инициализирует перетаскивание окна за заголовок. */
+function setupNewDeviceDragging(): void {
+    const header = document.querySelector<HTMLElement>('#newDeviceOverlay .new-device-header');
+    const win = document.querySelector<HTMLElement>('.new-device-window');
+    if (!header || !win) return;
+
+    header.addEventListener('mousedown', (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('button, input, select, a, textarea')) return;
+
+        newDeviceIsDragging = true;
+        newDeviceDragStartX = e.clientX - newDeviceDragOffsetX;
+        newDeviceDragStartY = e.clientY - newDeviceDragOffsetY;
+        document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', (e: MouseEvent) => {
+        if (!newDeviceIsDragging) return;
+        newDeviceDragOffsetX = e.clientX - newDeviceDragStartX;
+        newDeviceDragOffsetY = e.clientY - newDeviceDragStartY;
+        applyNewDeviceDragTransform();
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (!newDeviceIsDragging) return;
+        newDeviceIsDragging = false;
+        document.body.style.userSelect = '';
+    });
+}
+
 /**
  * Читает файл шаблона из папки TemplateDevice (рядом с exe) и возвращает File.
  *
@@ -86,8 +134,8 @@ export async function readTemplateFile(name: string): Promise<File | null> {
  *     создаёт пустую папку и просит пользователя положить в неё файлы.
  *  2. Открывает системный диалог выбора файла(ов).
  *  3. Для каждого выбранного файла вызывает Rust-команду copy_template_file.
- *     - Если файл уже внутри TemplateDevice — Rust ничего не копирует.
- *     - Если файл с таким именем уже есть в TemplateDevice — Rust возвращает
+ *     Если файл уже внутри TemplateDevice — Rust ничего не копирует.
+ *     Если файл с таким именем уже есть в TemplateDevice — Rust возвращает
  *       ошибку TEMPLATE_FILE_EXISTS, и мы спрашиваем "Перезаписать?".
  *  4. Обновляет оба <select> (в окне "Новое устройство" и в окне
  *     "Обновление программы устройства") через refreshTemplateSelects.
@@ -185,6 +233,8 @@ export async function handleAddTemplate(): Promise<void> {
 }
 
 export function initNewDeviceUI(): void {
+    setupNewDeviceDragging();
+
     document.getElementById('newDeviceCloseBtn')?.addEventListener('click', () => {
         hideNewDeviceModal();
     });
@@ -193,7 +243,7 @@ export function initNewDeviceUI(): void {
         hideNewDeviceModal();
     });
 
-           // "Создать резерв для блока": открывает окно выбора устройства-шаблона.
+    // "Создать резерв для блока": открывает окно выбора устройства-шаблона.
     document.getElementById('newDeviceBackupBtn')?.addEventListener('click', () => {
         showBackupWindow();
     });
@@ -202,8 +252,7 @@ export function initNewDeviceUI(): void {
         void handleAddToBase();
     });
 
-    // "Добавить шаблон": теперь это не клик по скрытому <input type="file">,
-    // а работа через Tauri-диалог и папку TemplateDevice (см. handleAddTemplate).
+    // "Добавить шаблон": работа через Tauri-диалог и папку TemplateDevice (см. handleAddTemplate).
     document.getElementById('newDeviceAddTemplateBtn')?.addEventListener('click', () => {
         void handleAddTemplate();
     });
@@ -253,6 +302,11 @@ export function showNewDeviceModal(idText: string): void {
     const overlay = document.getElementById('newDeviceOverlay');
     if (!overlay) return;
 
+    // Сбрасываем позицию окна — при каждом открытии оно по центру.
+    newDeviceDragOffsetX = 0;
+    newDeviceDragOffsetY = 0;
+    applyNewDeviceDragTransform();
+
     const idInput = document.getElementById('newDeviceIdInput') as HTMLInputElement | null;
     const typeInput = document.getElementById('newDeviceTypeInput') as HTMLInputElement | null;
     const verDevice = document.getElementById('newDeviceVerDevice');
@@ -274,10 +328,6 @@ export function showNewDeviceModal(idText: string): void {
     if (fwDate) fwDate.textContent = tokens[3] ?? '—';
 
     // Заполняем <select> шаблонов из папки TemplateDevice.
-    // Функция асинхронная (сканирует папку через Rust), но нам не нужно
-    // ждать её завершения, чтобы показать окно: список дозаполнится
-    // за миллисекунды, пока пользователь смотрит на форму.
-    // void — явно показываем, что результат намеренно не ждём.
     void refreshTemplateSelects();
 
     overlay.classList.remove('hidden');
@@ -287,8 +337,6 @@ export function showNewDeviceModal(idText: string): void {
 export function hideNewDeviceModal(): void {
     document.getElementById('newDeviceOverlay')?.classList.add('hidden');
 }
-
-
 
 /**
  * Строка-статус внизу окна (для сообщений без модальных окон).
