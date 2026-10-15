@@ -101,9 +101,9 @@
 
 .frame-input      { width: 40px;  text-align: center; }
 .address-input    { width: 50px;  text-align: center; }
-.mechanism-input  { width: 130px; }
+.mechanism-input  { width: 303px; }
 .date-input       { width: 90px;  text-align: center; }
-.location-input   { width: 120px; }
+.location-input   { width: 360px; }
 
 /* Информационная плашка идентифицированного устройства */
 .id-banner {
@@ -128,4 +128,7 @@
     outline: 2px solid #f87575;
     /* Зазор между краем плашки и рамкой, чтобы они не сливались */
     outline-offset: 1px;
+}
+.location-label {
+    margin-right: 12px;
 }
