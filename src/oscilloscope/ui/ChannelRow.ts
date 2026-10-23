@@ -126,16 +126,17 @@ export class ChannelRow {
                     .querySelectorAll(".channel-row.selected")
                     .forEach((el) => {
                         if (el !== this.element) el.classList.remove("selected");
-                        this.element.addEventListener("dblclick", () => {
-                            if (this.channel.isBit && this.onToggleBit) {
-                                this.onToggleBit(this.channel);
-                            }
-                        });
                     });
             }
             this.element.classList.add("selected");
             if (this.onSelect) {
                 this.onSelect(this.channel);
+            }
+        });
+
+        this.element.addEventListener("dblclick", () => {
+            if (this.channel.isBit && this.onToggleBit) {
+                this.onToggleBit(this.channel);
             }
         });
 

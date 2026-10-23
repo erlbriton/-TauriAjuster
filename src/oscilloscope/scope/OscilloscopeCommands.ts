@@ -6,6 +6,9 @@ import { buildWriteMultipleRegistersRequest } from "../../serial/modbus.js";
 import type { Channel } from "../core/Channel";
 import type { BottomPanels } from "../ui/BottomPanels";
 import { parseIpToRegisters } from "../../serial/ip-utils.js";
+import { serialManager } from "../../serial/serial-manager.js";
+import { calculateCRC } from "../../serial/modbus-crc.js";
+import type { CheckCompleteFn } from "../../serial/serial-manager.js";
 
 /** Зависимости для обработки команд */
 export interface CommandContext {
@@ -63,27 +66,41 @@ export async function handleCommandSubmit(
   }
 
   if (parsedReg.bit !== null) {
-    const serialWithRead = ctx.externalSerial as {
-      readRegister?(slaveId: number, address: number): Promise<number | null>;
+    // Формируем запрос чтения одного holding-регистра (FC 0x03)
+    const readFrame = new Uint8Array(8);
+    readFrame[0] = ctx.slaveAddress & 0xFF;
+    readFrame[1] = 0x03;
+    readFrame[2] = (parsedReg.address >> 8) & 0xFF;
+    readFrame[3] = parsedReg.address & 0xFF;
+    readFrame[4] = 0x00;
+    readFrame[5] = 0x01;
+    const readCrc = calculateCRC(readFrame.subarray(0, 6));
+    readFrame[6] = readCrc & 0xFF;
+    readFrame[7] = (readCrc >> 8) & 0xFF;
+
+    // Ответ FC 0x03 на 1 регистр: [slave, 0x03, 0x02, dataHi, dataLo, crcLo, crcHi]
+    const checkReadComplete: CheckCompleteFn = (buf: Uint8Array) => {
+      if (buf.length < 3) return false;
+      if (buf[1] === 0x83) return true; // exception
+      const byteCount = buf[2];
+      return buf.length >= 3 + byteCount + 2;
     };
 
-    if (!serialWithRead.readRegister) {
-      console.error(
-        "[Oscilloscope] externalSerial does not support readRegister.",
-      );
+    let reply: Uint8Array;
+    try {
+      reply = await serialManager.executeTransaction(readFrame, checkReadComplete, 500);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[Oscilloscope] Failed to read register for RMW:", msg);
       return;
     }
 
-    const currentVal = await serialWithRead.readRegister(
-      ctx.slaveAddress,
-      parsedReg.address,
-    );
-    if (currentVal === null) {
-      console.error(
-        "[Oscilloscope] Failed to read register for RMW operation.",
-      );
+    if (!reply || reply.length < 5 || reply[1] !== 0x03) {
+      console.error("[Oscilloscope] Invalid read reply for RMW.");
       return;
     }
+
+    const currentVal = (reply[3] << 8) | reply[4];
 
     let newVal = currentVal;
     if (valueToWrite !== 0) {

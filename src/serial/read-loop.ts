@@ -96,11 +96,13 @@ export async function readLoop(serial: ISerialPort, _parser: unknown, view: IOsc
             // 1. Формируем оптимальные батчи запросов Modbus
             //    по регистрам текущей секции (RAM или XRAM).
             const batches = getOptimizedBatches(iniConfig, sectionMode, 10, 125);
-            console.log(
-                `[readLoop] итерация: section=${sectionMode}, ` +
-                `sections=[${iniConfig.sectionNames.join(',')}], ` +
-                `batches=${batches.length}`,
-            );
+            // Отладочный лог итерации опроса — включать только при диагностике
+            // проблем с readLoop (спамит на каждой итерации).
+            // console.log(
+            //     `[readLoop] итерация: section=${sectionMode}, ` +
+            //     `sections=[${iniConfig.sectionNames.join(',')}], ` +
+            //     `batches=${batches.length}`,
+            // );
             if (batches.length === 0) {
                 await new Promise(r => setTimeout(r, 500));
                 continue;
