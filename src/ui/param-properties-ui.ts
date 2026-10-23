@@ -257,14 +257,15 @@ export function showParamPropertiesModal(param: ParamInfo, allSiblings: ParamInf
         try { parts = JSON.parse(row.dataset.parts || '[]'); } catch {}
     }
 
-    // Для TPRMLIST поля parts[8] и parts[9] содержат варианты выбора,
-    // а не зависимости. Считаем, что зависимостей нет.
+    // Для TPRMLIST и TIPADDR поля parts[8] и parts[9] содержат не зависимости,
+    // а специфичные данные (варианты выбора или IP-адрес).
+    // Считаем, что зависимостей нет.
     // Тип берём из атрибута data-type строки таблицы (в ParamInfo его нет).
-    const isPrmList = (row?.getAttribute('data-type') ?? '').toUpperCase() === 'TPRMLIST';
-    const dependsOn = isPrmList ? '' : (parts[8] ?? '').trim();
-    const hasDep = !isPrmList && dependsOn !== '' && dependsOn !== '0';
+    const dataType = (row?.getAttribute('data-type') ?? '').toUpperCase();
+    const isNoDepType = dataType === 'TPRMLIST' || dataType === 'TIPADDR';
+    const dependsOn = isNoDepType ? '' : (parts[8] ?? '').trim();
+    const hasDep = !isNoDepType && dependsOn !== '' && dependsOn !== '0';
     const multiplier = hasDep ? (parts[9] ?? '').trim() : '';
-    
     console.log(`[PARAM-PROPS] ${param.id}: parts[${parts.length}] =`, parts);
     console.log(`[PARAM-PROPS] scale из param.scale =`, param.scale);
     console.log(`[PARAM-PROPS] parts[8]=${parts[8]}, parts[9]=${parts[9]}`);
