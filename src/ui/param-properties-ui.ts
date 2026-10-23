@@ -257,8 +257,12 @@ export function showParamPropertiesModal(param: ParamInfo, allSiblings: ParamInf
         try { parts = JSON.parse(row.dataset.parts || '[]'); } catch {}
     }
 
-    const dependsOn = (parts[8] ?? '').trim();
-    const hasDep = dependsOn !== '' && dependsOn !== '0';
+    // Для TPRMLIST поля parts[8] и parts[9] содержат варианты выбора,
+    // а не зависимости. Считаем, что зависимостей нет.
+    // Тип берём из атрибута data-type строки таблицы (в ParamInfo его нет).
+    const isPrmList = (row?.getAttribute('data-type') ?? '').toUpperCase() === 'TPRMLIST';
+    const dependsOn = isPrmList ? '' : (parts[8] ?? '').trim();
+    const hasDep = !isPrmList && dependsOn !== '' && dependsOn !== '0';
     const multiplier = hasDep ? (parts[9] ?? '').trim() : '';
     
     console.log(`[PARAM-PROPS] ${param.id}: parts[${parts.length}] =`, parts);
