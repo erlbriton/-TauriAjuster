@@ -90,7 +90,7 @@ export async function writeRegistersFC16(
     };
 
     try {
-        const reply = await serialManager.executeTransaction(packet, checkComplete, 300);
+        const reply = await serialManager.executeTransaction(packet, checkComplete, 1000);
         if (!reply) return false;
 
         if (reply.length >= 8 && reply[1] === 0x10) {

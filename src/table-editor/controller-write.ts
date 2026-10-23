@@ -156,12 +156,20 @@ export async function processControllerWrite(
             writeOk = await writeRegistersFC16(slaveAddr, reg, plan.words);
             if (writeOk) {
                 console.log('[CONTROLLER] Запись FC16 подтверждена устройством.');
+                // Пауза: контроллеру нужно время, чтобы применить значение.
+                await new Promise((resolve) => setTimeout(resolve, 500));
                 readWords = await readHoldingRegistersFC03(slaveAddr, reg, plan.words.length);
             }
         } finally {
             if (wasPolling) {
                 console.log('[CONTROLLER] Возобновляю фоновый опрос.');
                 stateObj.isPolling = true;
+                // Ждём выхода readLoop, чтобы dispatch не проскочил раньше.
+                const deadline = Date.now() + 500;
+                while (stateObj.isLoopRunning && Date.now() < deadline) {
+                    await new Promise((r) => setTimeout(r, 20));
+                }
+                window.dispatchEvent(new CustomEvent('app:request-polling-restart'));
             }
         }
 
@@ -211,8 +219,6 @@ export async function processControllerWrite(
             setTimeout(() => activeCell.classList.remove('write-success'), 1000);
         }
         console.log('[CONTROLLER] Значение успешно записано, подтверждено и синхронизировано.');
-                // Диспетчеризация события для перезапуска цикла опроса.
-        window.dispatchEvent(new CustomEvent('app:request-polling-restart'));
         return true;
     }
 
@@ -252,12 +258,19 @@ export async function processControllerWrite(
             );
             writeOk = await writeRegistersFC16(slaveAddr, reg, [newWord]);
             if (writeOk) {
+                // Пауза: контроллеру нужно время, чтобы применить значение.
+                await new Promise((resolve) => setTimeout(resolve, 500));
                 readWords = await readHoldingRegistersFC03(slaveAddr, reg, 1);
             }
         } finally {
             if (wasPolling) {
                 console.log('[CONTROLLER] TBYTE: Возобновляю фоновый опрос.');
                 stateObj.isPolling = true;
+                const deadline = Date.now() + 500;
+                while (stateObj.isLoopRunning && Date.now() < deadline) {
+                    await new Promise((r) => setTimeout(r, 20));
+                }
+                window.dispatchEvent(new CustomEvent('app:request-polling-restart'));
             }
         }
 
@@ -353,12 +366,19 @@ export async function processControllerWrite(
         );
         writeOk = await writeRegistersFC16(slaveAddr, reg, [newWord]);
         if (writeOk) {
+            // Пауза: контроллеру нужно время, чтобы применить значение.
+            await new Promise((resolve) => setTimeout(resolve, 500));
             readWords = await readHoldingRegistersFC03(slaveAddr, reg, 1);
         }
     } finally {
         if (wasPolling) {
             console.log('[CONTROLLER] TBIT: Возобновляю фоновый опрос.');
             stateObj.isPolling = true;
+            const deadline = Date.now() + 500;
+            while (stateObj.isLoopRunning && Date.now() < deadline) {
+                await new Promise((r) => setTimeout(r, 20));
+            }
+            window.dispatchEvent(new CustomEvent('app:request-polling-restart'));
         }
     }
 
