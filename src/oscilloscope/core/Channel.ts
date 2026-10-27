@@ -71,10 +71,13 @@ export class Channel {
         this.autoScale = config.autoScale !== undefined ? config.autoScale : true;
 
         this.rawDecValue = config.rawDecValue !== undefined ? config.rawDecValue : 0;
-        // Для TIPAddr (4 байта) используем 32-битную маску, для остальных — 16-битную
-        const isIpAddr = this.dataType.toUpperCase() === 'TIPADDR';
-        const mask = isIpAddr ? 0xFFFFFFFF : 0xFFFF;
-        const padLen = isIpAddr ? 8 : 4;
+        // Для TIPAddr (4 байта) — 32-битная маска, для TBYTE (1 байт) — 8-битная, остальные — 16-битная
+        const typeUpper = this.dataType.toUpperCase();
+        const isIpAddr = typeUpper === 'TIPADDR';
+        const isTByte = typeUpper === 'TBYTE';
+        
+        const mask = isIpAddr ? 0xFFFFFFFF : (isTByte ? 0xFF : 0xFFFF);
+        const padLen = isIpAddr ? 8 : (isTByte ? 2 : 4);
         this.hexValue = config.hexValue || ('x' + (this.rawDecValue & mask).toString(16).toUpperCase().padStart(padLen, '0'));
         this.scaledValue = this.isBit ? this.rawDecValue : (this.rawDecValue * this.scale);
         this.value = this.scaledValue;
@@ -86,13 +89,28 @@ export class Channel {
     }
 
     public updateRawValue(val: number): void {
-        this.rawDecValue = val;
-        // Для TIPAddr (4 байта) используем 32-битную маску, для остальных — 16-битную
-                const isIpAddr = this.dataType.toUpperCase() === 'TIPADDR';
-        const mask = isIpAddr ? 0xFFFFFFFF : 0xFFFF;
-        const padLen = isIpAddr ? 8 : 4;
-        this.hexValue = 'x' + (val & mask).toString(16).toUpperCase().padStart(padLen, '0');
-        this.scaledValue = this.applyScale(val);
+        // Для TBYTE (8-битных параметров) извлекаем нужный байт из 16-битного регистра
+        let processedVal = val;
+        if (this.dataType.toUpperCase() === 'TBYTE') {
+            const upperReg = this.modbusReg.toUpperCase();
+            if (upperReg.endsWith('.L')) {
+                processedVal = val & 0xFF;
+            } else if (upperReg.endsWith('.H')) {
+                processedVal = (val >> 8) & 0xFF;
+            }
+        }
+
+        this.rawDecValue = processedVal;
+        // Для TIPAddr (4 байта) — 32-битная маска, для TBYTE (1 байт) — 8-битная, остальные — 16-битная
+        const typeUpper = this.dataType.toUpperCase();
+        const isIpAddr = typeUpper === 'TIPADDR';
+        const isTByte = typeUpper === 'TBYTE';
+        
+        const mask = isIpAddr ? 0xFFFFFFFF : (isTByte ? 0xFF : 0xFFFF);
+        const padLen = isIpAddr ? 8 : (isTByte ? 2 : 4);
+        
+        this.hexValue = 'x' + (processedVal & mask).toString(16).toUpperCase().padStart(padLen, '0');
+        this.scaledValue = this.applyScale(processedVal);
         this.value = this.scaledValue;
     }
 
