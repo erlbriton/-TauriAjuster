@@ -231,7 +231,7 @@ export async function readLoop(serial: ISerialPort, _parser: unknown, view: IOsc
                                     buffers[param.id].push(val);
                                 }
                             }
-            }//////////////////////////////////////////////////////////////////////////////////////////////////
+            }
                 const activeOsc = window.osc ?? view;
                 if (activeOsc) {
                     activeOsc.draw(oscData);
@@ -267,38 +267,46 @@ export async function readLoop(serial: ISerialPort, _parser: unknown, view: IOsc
                                 if (h && t) prmListOptions[h.toLowerCase()] = t;
                             }
                         }
+                        const typeUpper = dataType.toUpperCase();
+                        const subUpper = (sub || '').replace('.', '').toUpperCase();
                         let hexValue = '';
-                        if (dataType === 'TByte' || dataType === 'TPrmList') {
-                            const byteVal = (sub === 'H') ? ((word >> 8) & 0xFF) : (word & 0xFF);
-                            hexValue = 'x' + byteVal.toString(16).toUpperCase().padStart(originalHexLen, '0');
-                        } else if (dataType === 'TBit') {
-                            const bitIndex = parseInt(sub, 16);
+                        
+                        // TBYTE теперь обрабатывается в блоке else (передается полное слово)
+                        if (typeUpper === 'TPRMLIST') {
+                            const byteVal = (subUpper === 'H') ? ((word >> 8) & 0xFF) : (word & 0xFF);
+                            hexValue = 'x' + byteVal.toString(16).toUpperCase().padStart(2, '0');
+                        } else if (typeUpper === 'TBIT') {
+                            const bitIndex = parseInt(subUpper, 16);
                             const bitVal = (word >> (isNaN(bitIndex) ? 0 : bitIndex)) & 1;
-                            hexValue = 'x' + bitVal.toString(16).toUpperCase().padStart(originalHexLen, '0');
-                        } else if (dataType.includes('FLOAT') || dataType.includes('DWORD') || dataType.includes('LONG') || dataType.includes('INT32')) {
+                            hexValue = 'x' + bitVal.toString(16).toUpperCase().padStart(2, '0');
+                        } else if (typeUpper.includes('FLOAT') || typeUpper.includes('DWORD') || typeUpper.includes('LONG') || typeUpper.includes('INT32')) {
                             if (mergedDataMap.has(reg + 1)) {
                                 const nextWord = mergedDataMap.get(reg + 1)!;
                                 hexValue = 'x' + nextWord.toString(16).toUpperCase().padStart(4, '0') + word.toString(16).toUpperCase().padStart(4, '0');
                             }
                         } else {
+                            // Сюда попадает и TBYTE — передаем полное 16-битное слово
                             hexValue = 'x' + word.toString(16).toUpperCase().padStart(originalHexLen, '0');
                         }
                         if (hexValue && hIdx !== -1 && hIdx < parts.length) {
-                            parts[hIdx] = hexValue;
-                            tr.dataset.parts = JSON.stringify(parts);
-                            updateRowValues(tr, parts, dataType, scale, hIdx, originalHexLen, prmListOptions, hexToFloat32, float32ToHex, 4);
+                            // Создаём временный массив, чтобы не перезаписывать Базу (parts)
+                            const tempParts = [...parts];
+                            tempParts[hIdx] = hexValue;
+
+                            // Передаём 6, чтобы обновить колонку Контроллера (td[6] и td[7])
+                            updateRowValues(tr, tempParts, dataType, scale, hIdx, originalHexLen, prmListOptions, hexToFloat32, float32ToHex, 6);
 
                             // Подсветка расхождения База/Контроллер:
-                            // сравниваем hex-ячейки (td[4] и td[6]), красим диапазон td[4..7]
+                            // tds[4] - это База, tds[6] - это Контроллер
                             const tds = tr.querySelectorAll('td');
                             const normHex = (t: string): string =>
                                 t.trim().toUpperCase().replace(/^X/, '').replace(/^0+(?=.)/, '');
-                            const hexLive = tds[4] ? (tds[4].textContent || '').trim() : '';
-                            const hexBase = tds[6] ? (tds[6].textContent || '').trim() : '';
+                            const hexBase = tds[4] ? (tds[4].textContent || '').trim() : '';
+                            const hexCtrl = tds[6] ? (tds[6].textContent || '').trim() : '';
                             const mismatch =
-                                hexLive.startsWith('X') &&
                                 hexBase.startsWith('X') &&
-                                normHex(hexLive) !== normHex(hexBase);
+                                hexCtrl.startsWith('X') &&
+                                normHex(hexBase) !== normHex(hexCtrl);
                             tr.classList.toggle('row-mismatch', mismatch);
                         }
                     });

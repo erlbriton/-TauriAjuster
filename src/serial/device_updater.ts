@@ -196,7 +196,7 @@ export async function updateDeviceRegisters(
                     let hexValue = "";
 
                    // dataType уже в верхнем регистре (нормализован выше).
-                    if (dataType === "TBYTE" || dataType === "TPRMLIST") {
+                    if (dataType === "TPRMLIST") {
                       if (sub === "H") {
                         const byteVal = (word >> 8) & 0xff;
                         hexValue =
@@ -235,13 +235,13 @@ export async function updateDeviceRegisters(
                     }
 
                     if (hexValue && hIdx >= 0 && hIdx < parts.length) {
-                      parts[hIdx] = hexValue;
-                      if (parts.length > 6) {
-                        parts[6] = scaleStr;
-                      }
-                      tr.dataset.parts = JSON.stringify(parts);
+                      // Создаём временный массив, чтобы не перезаписывать Базу (parts)
+                      const tempParts = [...parts];
+                      tempParts[hIdx] = hexValue;
+                      
+                      // Передаём 6 (колонка Контроллера), чтобы обновить только её
                       updateRowValues(
-                        tr, parts, dataType, scale, hIdx,
+                        tr, tempParts, dataType, scale, hIdx,
                         originalHexLen, prmListOptions,
                         hexToFloat32, float32ToHex, 6,
                       );

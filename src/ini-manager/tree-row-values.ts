@@ -106,6 +106,24 @@ export function updateRowValues(
                 }
             } else {
                 let decValue = parseInt(rHex.slice(1), 16);
+                let isByte = false;
+                
+                // Для TBYTE отрезаем нужный байт из 16-битного слова
+                if (dataTypeUpper === 'TBYTE' && !isNaN(decValue)) {
+                    const sub = (rowElement.getAttribute('data-sub') || '').replace('.', '').toUpperCase();
+                    if (sub === 'L') {
+                        decValue = decValue & 0xFF;
+                        isByte = true;
+                    } else if (sub === 'H') {
+                        decValue = (decValue >> 8) & 0xFF;
+                        isByte = true;
+                    }
+                    if (isByte) {
+                        // Перезаписываем hex, чтобы в Базе было 2 символа
+                        bHex = 'x' + decValue.toString(16).toUpperCase().padStart(2, '0');
+                    }
+                }
+
                 if (!isNaN(decValue)) {
                     if (dataTypeUpper === 'TSHORT' || dataTypeUpper === 'TINT16' || dataTypeUpper === 'TINTEGER') {
                         if (decValue > 32767) decValue -= 65536;

@@ -125,13 +125,32 @@ export async function processValueWrite(
             parts[hexIndexInParts] = newHexValue;
         } else {
             const rawVal = Math.round(valNum / scale);
-            if (is32Bit) {
+            
+            if (dataType === 'TBYTE') {
+                // Сохраняем второй байт неизменным
+                const subByte = (tr.getAttribute('data-sub') || '').replace('.', '').toUpperCase();
+                const byteVal = rawVal & 0xFF;
+                const currentWordHex = (parts[hexIndexInParts] || 'x0000').replace(/^x/i, '');
+                const currentWord = parseInt(currentWordHex, 16) || 0;
+                
+                let newWord = currentWord;
+                if (subByte === 'H') {
+                    newWord = (currentWord & 0x00FF) | (byteVal << 8);
+                } else {
+                    newWord = (currentWord & 0xFF00) | byteVal;
+                }
+                
+                parts[hexIndexInParts] = 'x' + newWord.toString(16).toUpperCase().padStart(4, '0');
+                newHexValue = 'x' + byteVal.toString(16).toUpperCase().padStart(2, '0');
+                newPhysValue = byteVal.toString();
+            } else if (is32Bit) {
                 newHexValue = 'x' + rawVal.toString(16).toUpperCase().padStart(8, '0');
+                parts[hexIndexInParts] = newHexValue;
             } else {
                 const word = rawVal & 0xFFFF;
                 newHexValue = 'x' + word.toString(16).toUpperCase().padStart(4, '0');
+                parts[hexIndexInParts] = newHexValue;
             }
-            parts[hexIndexInParts] = newHexValue;
         }
     }
 

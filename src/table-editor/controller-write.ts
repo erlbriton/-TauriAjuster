@@ -300,7 +300,21 @@ export async function processControllerWrite(
         const tds = tr.querySelectorAll('td');
         const hexIndex = parseInt(tr.getAttribute('data-hex-index') || '-1', 10);
         const byteHex = 'x' + plan.byteValue.toString(16).toUpperCase().padStart(2, '0');
-        if (hexIndex >= 0 && hexIndex < parts.length) parts[hexIndex] = byteHex;
+        
+        // Обновляем parts, сохраняя второй байт неизменным
+        if (hexIndex >= 0 && hexIndex < parts.length) {
+            const currentWordHex = (parts[hexIndex] || 'x0000').replace(/^x/i, '');
+            const currentWord = parseInt(currentWordHex, 16) || 0;
+            let newWord = currentWord;
+            
+            if (plan.bytePos === 'H') {
+                newWord = (currentWord & 0x00FF) | (plan.byteValue << 8);
+            } else {
+                newWord = (currentWord & 0xFF00) | plan.byteValue;
+            }
+            
+            parts[hexIndex] = 'x' + newWord.toString(16).toUpperCase().padStart(4, '0');
+        }
         tr.dataset.parts = JSON.stringify(parts);
 
         if (dataType === 'TPRMLIST') {
