@@ -147,7 +147,11 @@ export async function processControllerWrite(
         if (wasPolling) {
             console.log('[CONTROLLER] Фоновый опрос активен — приостанавливаю на время транзакций...');
             stateObj.isPolling = false;
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            // Ждём, пока readLoop завершит текущую транзакцию и полностью остановится
+            const deadline = Date.now() + 2000;
+            while (stateObj.isLoopRunning && Date.now() < deadline) {
+                await new Promise((r) => setTimeout(r, 20));
+            }
         }
 
         let writeOk = false;
@@ -162,13 +166,13 @@ export async function processControllerWrite(
             }
         } finally {
             if (wasPolling) {
-                console.log('[CONTROLLER] Возобновляю фоновый опрос.');
-                stateObj.isPolling = true;
-                // Ждём выхода readLoop, чтобы dispatch не проскочил раньше.
+                // Ждём полной остановки readLoop (на случай, если он ещё завершается)
                 const deadline = Date.now() + 500;
                 while (stateObj.isLoopRunning && Date.now() < deadline) {
                     await new Promise((r) => setTimeout(r, 20));
                 }
+                console.log('[CONTROLLER] Возобновляю фоновый опрос.');
+                stateObj.isPolling = true;
                 window.dispatchEvent(new CustomEvent('app:request-polling-restart'));
             }
         }
@@ -228,7 +232,10 @@ export async function processControllerWrite(
         if (wasPolling) {
             console.log('[CONTROLLER] TBYTE: Фоновый опрос активен — приостанавливаю...');
             stateObj.isPolling = false;
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            const deadline = Date.now() + 2000;
+            while (stateObj.isLoopRunning && Date.now() < deadline) {
+                await new Promise((r) => setTimeout(r, 20));
+            }
         }
 
         let currentWords: number[] | null = null;
@@ -264,14 +271,16 @@ export async function processControllerWrite(
             }
         } finally {
             if (wasPolling) {
-                console.log('[CONTROLLER] TBYTE: Возобновляю фоновый опрос.');
-                stateObj.isPolling = true;
+                // Ждём полной остановки readLoop (на случай, если он ещё завершается)
                 const deadline = Date.now() + 500;
                 while (stateObj.isLoopRunning && Date.now() < deadline) {
                     await new Promise((r) => setTimeout(r, 20));
                 }
+                console.log('[CONTROLLER] Возобновляю фоновый опрос.');
+                stateObj.isPolling = true;
                 window.dispatchEvent(new CustomEvent('app:request-polling-restart'));
             }
+            
         }
 
         if (!writeOk) {
@@ -351,7 +360,10 @@ export async function processControllerWrite(
     if (wasPolling) {
         console.log('[CONTROLLER] TBIT: Фоновый опрос активен — приостанавливаю...');
         stateObj.isPolling = false;
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        const deadline = Date.now() + 2000;
+        while (stateObj.isLoopRunning && Date.now() < deadline) {
+            await new Promise((r) => setTimeout(r, 20));
+        }
     }
 
     let currentWords: number[] | null = null;
@@ -386,14 +398,15 @@ export async function processControllerWrite(
         }
     } finally {
         if (wasPolling) {
-            console.log('[CONTROLLER] TBIT: Возобновляю фоновый опрос.');
-            stateObj.isPolling = true;
-            const deadline = Date.now() + 500;
-            while (stateObj.isLoopRunning && Date.now() < deadline) {
-                await new Promise((r) => setTimeout(r, 20));
+                // Ждём полной остановки readLoop (на случай, если он ещё завершается)
+                const deadline = Date.now() + 500;
+                while (stateObj.isLoopRunning && Date.now() < deadline) {
+                    await new Promise((r) => setTimeout(r, 20));
+                }
+                console.log('[CONTROLLER] Возобновляю фоновый опрос.');
+                stateObj.isPolling = true;
+                window.dispatchEvent(new CustomEvent('app:request-polling-restart'));
             }
-            window.dispatchEvent(new CustomEvent('app:request-polling-restart'));
-        }
     }
 
     if (!writeOk) {
