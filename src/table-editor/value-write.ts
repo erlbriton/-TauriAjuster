@@ -1,4 +1,3 @@
-
 // src/table-editor/value-write.ts
 // Диспетчер записи значения: распределяет запрос между Контроллером и Базой.
 
@@ -93,7 +92,8 @@ export async function processValueWrite(
             newPhysValue = bitVal.toString();
         } else {
             let signedVal = parsedVal;
-            if (!is32Bit && signedVal > 32767) signedVal -= 65536;
+            // Убеждаемся, что TWORD не обрабатывается как знаковое число при > 32767
+            if (!is32Bit && dataType !== 'TWORD' && signedVal > 32767) signedVal -= 65536;
             if (is32Bit && parsedVal > 2147483647) signedVal = parsedVal - 4294967296;
             newPhysValue = (signedVal * scale).toString();
         }
