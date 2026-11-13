@@ -8,5 +8,7 @@ export {
   type IniParameter,
   type IniDeviceInfo,
   type IniParseResult,
+  type IniPage,
+  type IniPageItem,
   IniParseError,
 } from './types.js';

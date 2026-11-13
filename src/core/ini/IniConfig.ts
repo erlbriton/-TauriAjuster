@@ -7,6 +7,7 @@ import {
   IniParameter,
   IniDeviceInfo,
   IniParseResult,
+  IniPage,
 } from './types.js';
 
 export class IniConfig {
@@ -33,6 +34,10 @@ export class IniConfig {
 
   get vars(): Readonly<Record<string, number>> {
     return this.parseResult.vars;
+  }
+
+  get pages(): IniPage[] {
+    return this.parseResult.pages;
   }
 
   get sectionNames(): readonly string[] {

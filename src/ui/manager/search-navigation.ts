@@ -9,6 +9,7 @@
 
 import type { AppState } from '../../core/app-state.js';
 import { getAllDevices, getDeviceGroupKey, currentIniConfig } from '../../ini-manager/tree-core.js';
+import type { IniPage } from '../../core/ini/index.js';
 import { setTreeGroupMode } from '../../ini-manager/tree-core.js';
 import { renderDeviceTree } from '../../ini-manager/tree-ui.js';
 import { processSingleFileContent } from '../../ini-manager/file-loader.js';
@@ -18,6 +19,13 @@ import { initParamPropertiesUI } from '../param-properties-ui.js';
 import { initHelpUI, showHelpWindow } from '../help-ui.js';
 import { SearchPanel } from '../../oscilloscope/ui/SearchPanel.js';
 import { hasAnyDirty } from '../../ini-manager/dirty-tracker.js';
+import { renderModbusTable } from '../tree.js';
+import {
+  setActiveIniPage,
+  clearActiveIniPage,
+  beginPageSectionChange,
+  endPageSectionChange,
+} from './active-page-filter.js';
 
 interface SearchNavigationUIDeps {
   appState: AppState;
@@ -31,6 +39,10 @@ interface SearchNavigationUIDeps {
   treeSearchMainBtn: HTMLElement | null;
   treeSearchDropdownBtn: HTMLElement | null;
   treeSearchMenu: HTMLElement | null;
+  pagesSplit: HTMLElement | null;
+  pagesMainBtn: HTMLElement | null;
+  pagesDropdownBtn: HTMLElement | null;
+  pagesMenu: HTMLElement | null;
   todayBtn: HTMLElement | null;
 }
 
@@ -47,6 +59,10 @@ export function initSearchNavigationUI(deps: SearchNavigationUIDeps): void {
     treeSearchMainBtn,
     treeSearchDropdownBtn,
     treeSearchMenu,
+    pagesSplit,
+    pagesMainBtn,
+    pagesDropdownBtn,
+    pagesMenu,
     todayBtn
   } = deps;
 
@@ -171,10 +187,70 @@ export function initSearchNavigationUI(deps: SearchNavigationUIDeps): void {
   // Клик по основной части (знак вопроса) — сразу "Поиск места установки"
   treeSearchMainBtn?.addEventListener('click', openTreeSearchOverlay);
 
-  // Клик по треугольнику — показать/скрыть меню
-  treeSearchDropdownBtn?.addEventListener('click', (e) => {
+ // Клик по треугольнику меню страниц — показать/скрыть меню
+  pagesDropdownBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
-    treeSearchMenu?.classList.toggle('show');
+    
+    // Динамически наполняем меню страницами, если есть загруженный конфиг
+    if (pagesMenu && currentIniConfig && currentIniConfig.pages) {
+      pagesMenu.innerHTML = '';
+      if (currentIniConfig.pages.length === 0) {
+        const emptyItem = document.createElement('div');
+        emptyItem.className = 'dropdown-item disabled';
+        emptyItem.textContent = 'Нет доступных страниц';
+        pagesMenu.appendChild(emptyItem);
+      } else {
+        currentIniConfig.pages.forEach((page) => {
+          const item = document.createElement('div');
+          item.className = 'dropdown-item';
+          item.style.cursor = 'pointer';
+          item.style.userSelect = 'none';
+          item.setAttribute('data-page-id', page.id);
+          item.textContent = page.name || page.id;
+          pagesMenu.appendChild(item);
+        });
+      }
+    }
+
+    pagesMenu?.classList.toggle('show');
+  });
+
+   // Клик по пункту меню страниц
+ pagesMenu?.addEventListener('click', (e) => {
+   const target = e.target as HTMLElement;
+   const itemEl = target.closest('[data-page-id]') as HTMLElement;
+   if (!itemEl) return;
+
+   const pageId = itemEl.getAttribute('data-page-id');
+   if (!pageId) return;
+
+   pagesMenu.classList.remove('show');
+   console.log('Выбрана страница:', pageId);
+
+   if (!currentIniConfig) return;
+
+   const page = currentIniConfig.pages.find((p: IniPage) => p.id === pageId);
+   if (!page || page.items.length === 0) {
+     // Нет состава страницы — снимаем фильтр, показываем всё.
+     clearActiveIniPage();
+     renderModbusTable(currentIniConfig, window.appState);
+     return;
+   }
+
+   // Ставим активную страницу как фильтр для грида и осциллографа.
+   // Секцию НЕ переключаем — фильтр применяется к той секции,
+   // которая сейчас активна.
+   setActiveIniPage(page);
+   renderModbusTable(currentIniConfig, window.appState);
+ });
+
+  // Закрыть меню страниц при клике вне его
+  document.addEventListener('click', (e) => {
+    if (pagesMenu && pagesMenu.classList.contains('show')) {
+      if (pagesSplit && !pagesSplit.contains(e.target as Node)) {
+        pagesMenu.classList.remove('show');
+      }
+    }
   });
 
   // Клик по пункту меню

@@ -206,6 +206,10 @@ export function initUI(deps: UiManagerDeps): void {
   const treeSearchMainBtnEl = document.getElementById('treeSearchMainBtn') as HTMLElement | null;
   const treeSearchDropdownBtnEl = document.getElementById('treeSearchDropdownBtn') as HTMLElement | null;
   const treeSearchMenuEl = document.getElementById('treeSearchMenu') as HTMLElement | null;
+  const pagesSplitEl = document.getElementById('pagesSplit') as HTMLElement | null;
+  const pagesMainBtnEl = document.getElementById('pagesMainBtn') as HTMLElement | null;
+  const pagesDropdownBtnEl = document.getElementById('pagesDropdownBtn') as HTMLElement | null;
+  const pagesMenuEl = document.getElementById('pagesMenu') as HTMLElement | null;
   const todayBtnEl = document.getElementById('todayBtn') as HTMLElement | null;
 
   initSearchNavigationUI({
@@ -220,6 +224,10 @@ export function initUI(deps: UiManagerDeps): void {
     treeSearchMainBtn: treeSearchMainBtnEl,
     treeSearchDropdownBtn: treeSearchDropdownBtnEl,
     treeSearchMenu: treeSearchMenuEl,
+    pagesSplit: pagesSplitEl,
+    pagesMainBtn: pagesMainBtnEl,
+    pagesDropdownBtn: pagesDropdownBtnEl,
+    pagesMenu: pagesMenuEl,
     todayBtn: todayBtnEl
   });
 

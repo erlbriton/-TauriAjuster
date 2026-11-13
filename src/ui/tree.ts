@@ -4,14 +4,19 @@ import { showParamPropertiesModal } from './param-properties-ui.js';
 import { populateDeviceForm } from './ui.js';
 import { currentIniConfig, hexToFloat32, float32ToHex } from '../ini-manager/tree-core.js';
 import {
-    clearAnyActiveCellEditors,
-    initHexCellEditor,
-    initPhysicalCellEditor,
+   clearAnyActiveCellEditors,
+   initHexCellEditor,
+   initPhysicalCellEditor,
 } from '../ini-manager/table-editor.js';
 import { updateRowValues } from '../ini-manager/tree-ui.js';
 import { IniConfig } from '../core/ini/index.js';
 import type { TableEditorState } from '../ini-manager/table-editor.js'; // Импортируем тип состояния
 import { isDirty } from '../ini-manager/dirty-tracker.js';
+import {
+   filterIniParamsByActivePage,
+   clearActiveIniPage,
+   isApplyingPageSection,
+} from './manager/active-page-filter.js';
 
 declare global {
     interface Window {
@@ -42,7 +47,14 @@ export function renderModbusTable(config?: IniConfig, appState?: TableEditorStat
 
     if (!config || !config.isValid) return;
 
-    const params = config.getSection(selectedMode);
+    // Полный список параметров активной секции — как в INI.
+    const allParams = config.getSection(selectedMode);
+
+    // Если выбрана страница [PAGES] — показываем только те параметры,
+    // которые перечислены в page.items для этой секции.
+    // Если страница не выбрана или в page.items нет этой секции — allParams.
+    const params = filterIniParamsByActivePage(selectedMode, allParams);
+
     if (params.length === 0) return;
 
     for (const param of params) {
@@ -311,6 +323,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (modeSelect) {
         modeSelect.addEventListener('change', () => {
             clearAnyActiveCellEditors();
+
+            // Фильтр активной страницы НЕ сбрасываем: пользователь может
+            // свободно переключать секции, пока в меню PAGES не выбран
+            // пункт "Показать все".
+
             // При смене режима передаем текущий конфиг и (опционально) состояние, если оно доступно глобально
             // В идеале вызвать renderModbusTable(currentIniConfig, window.appState)
             if (currentIniConfig) {

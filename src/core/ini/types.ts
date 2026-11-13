@@ -50,12 +50,26 @@ export interface IniDeviceInfo {
   readonly raw: Record<string, string>;
 }
 
+/** Элемент страницы параметров */
+export interface IniPageItem {
+  readonly section: string;
+  readonly paramName: string;
+}
+
+/** Страница параметров */
+export interface IniPage {
+  readonly id: string;
+  readonly name: string;
+  readonly items: IniPageItem[];
+}
+
 /** Результат парсинга INI-файла */
 export interface IniParseResult {
   readonly device: IniDeviceInfo | null;
   readonly vars: Readonly<Record<string, number>>;
   readonly sections: ReadonlyMap<string, IniParameter[]>;
   readonly rawSections: Readonly<Record<string, Record<string, string | string[]>>>;
+  readonly pages: IniPage[];
 }
 
 /** Ошибка парсинга с контекстом */

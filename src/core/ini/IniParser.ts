@@ -115,7 +115,7 @@ export class IniParser {
       }
     }
 
-    // Фаза 4: DEVICE
+   // Фаза 4: DEVICE
     const device = this.parseDevice(rawSections['DEVICE']);
 
     return { device, vars, sections, rawSections, pages };
