@@ -219,9 +219,13 @@
 .split-btn-group .tree-search-btn {
     margin-left: 0 !important;
 }
-/* Кнопка поиска в дереве — прижата к правому краю тулбара */
-#treeSearchSplit {
+/* Кнопка Pages прижата к правому краю тулбара, а поиск идет следом */
+#pagesSplit {
     margin-left: auto;
+}
+
+#treeSearchSplit {
+    margin-left: 0;
 }
 
 /* Меню кнопки поиска открывается влево, чтобы не выходить за правый край экрана */

@@ -8,6 +8,8 @@ import {
   IniDeviceInfo,
   IniParseResult,
   IniParseError,
+  IniPage,
+  IniPageItem,
 } from './types.js';
 
 /** Типы, занимающие 2 регистра (32 бит) */
@@ -58,6 +60,9 @@ export class IniParser {
 
     // Фаза 1: [vars]
     const vars = this.scanVars(lines);
+
+    // Фаза 1.5: [PAGES]
+    const pages = this.parsePages(lines);
 
     // Фаза 2: секции и сырые данные
     const rawSections: Record<string, Record<string, string | string[]>> = {};
@@ -113,7 +118,7 @@ export class IniParser {
     // Фаза 4: DEVICE
     const device = this.parseDevice(rawSections['DEVICE']);
 
-    return { device, vars, sections, rawSections };
+    return { device, vars, sections, rawSections, pages };
   }
 
   // ──────────────────────────────────────────
@@ -145,6 +150,55 @@ export class IniParser {
       }
     }
     return vars;
+  }
+
+  private parsePages(lines: string[]): IniPage[] {
+    const pages: IniPage[] = [];
+    let inPages = false;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed === '' || trimmed.startsWith(';')) continue;
+
+      if (trimmed.toUpperCase() === '[PAGES]') {
+        inPages = true;
+        continue;
+      }
+      if (trimmed.startsWith('[')) {
+        inPages = false;
+        continue;
+      }
+
+      if (inPages && trimmed.includes('=')) {
+        const eqIdx = trimmed.indexOf('=');
+        const id = trimmed.substring(0, eqIdx).trim();
+        const rawVal = trimmed.substring(eqIdx + 1).trim();
+
+        const slashParts = rawVal.split('/');
+        const pageName = (slashParts[0] ?? '').trim();
+        const itemsStr = (slashParts[1] ?? '').trim();
+
+        const items: IniPageItem[] = [];
+        if (itemsStr) {
+          const itemPairs = itemsStr.split(',');
+          for (const pair of itemPairs) {
+            const colonIdx = pair.indexOf(':');
+            if (colonIdx !== -1) {
+              const section = pair.substring(0, colonIdx).trim().toUpperCase();
+              const paramName = pair.substring(colonIdx + 1).trim();
+              if (section && paramName) {
+                items.push({ section, paramName });
+              }
+            }
+          }
+        }
+
+        if (pageName) {
+          pages.push({ id, name: pageName, items });
+        }
+      }
+    }
+    return pages;
   }
 
   private buildParameter(
