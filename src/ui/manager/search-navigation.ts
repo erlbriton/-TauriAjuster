@@ -262,6 +262,9 @@ export function initSearchNavigationUI(deps: SearchNavigationUIDeps): void {
      clearActiveIniPage();
      renderModbusTable(currentIniConfig, window.appState);
      refreshOscChannelsByActivePage();
+     // Автоопрос контроллера — как при смене вкладок FLASH/CD/RAM
+     // и при загрузке INI-файла.
+     window.dispatchEvent(new CustomEvent('app:ini-file-loaded'));
      return;
    }
 
@@ -271,6 +274,9 @@ export function initSearchNavigationUI(deps: SearchNavigationUIDeps): void {
      clearActiveIniPage();
      renderModbusTable(currentIniConfig, window.appState);
      refreshOscChannelsByActivePage();
+     // Автоопрос контроллера — как при смене вкладок FLASH/CD/RAM
+     // и при загрузке INI-файла.
+     window.dispatchEvent(new CustomEvent('app:ini-file-loaded'));
      return;
    }
 
@@ -280,6 +286,9 @@ export function initSearchNavigationUI(deps: SearchNavigationUIDeps): void {
    setActiveIniPage(page);
    renderModbusTable(currentIniConfig, window.appState);
    refreshOscChannelsByActivePage();
+   // Автоопрос контроллера — как при смене вкладок FLASH/CD/RAM
+   // и при загрузке INI-файла.
+   window.dispatchEvent(new CustomEvent('app:ini-file-loaded'));
  });
 
   // Закрыть меню страниц при клике вне его

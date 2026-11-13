@@ -94,13 +94,19 @@ export async function loadIniContent(osc: Oscilloscope, iniContent: string): Pro
     const coreParser = new CoreIniParser();
     const parseResult = coreParser.parse(iniContent);
     const iniConfig = new IniConfig(parseResult);
-    // Секция берётся из текущего режима (RAM/XRAM), переключаемого
-    // кнопками в окне «Свойства просмотра параметров».
-    const allParams = iniConfig.getSection(osc.currentSectionMode);
-    // Если выбрана страница [PAGES] — фильтруем по её составу.
-    const sectionParams = filterIniParamsByActivePage(osc.currentSectionMode, allParams);
-    const channelConfigs = iniParamsToChannelConfigs(sectionParams);
-    await osc.applyChannelConfigs(channelConfigs);
+    // XRAM в PAGES не участвует: если текущий режим осциллографа — XRAM,
+    // каналы не строим.
+    if (osc.currentSectionMode === 'XRAM') {
+      await osc.applyChannelConfigs([]);
+    } else {
+      // Секция берётся из текущего режима (RAM/XRAM), переключаемого
+      // кнопками в окне «Свойства просмотра параметров».
+      const allParams = iniConfig.getSection(osc.currentSectionMode);
+      // Если выбрана страница [PAGES] — фильтруем по её составу.
+      const sectionParams = filterIniParamsByActivePage(osc.currentSectionMode, allParams);
+      const channelConfigs = iniParamsToChannelConfigs(sectionParams);
+      await osc.applyChannelConfigs(channelConfigs);
+    }
     osc.currentIniConfig = iniConfig;
     osc.lastLoadedIniContent = iniContent;
   } catch (err) {
@@ -123,7 +129,16 @@ export async function setSectionMode(osc: Oscilloscope, mode: 'RAM' | 'XRAM'): P
   if (osc.currentSectionMode === mode) return;
   osc.currentSectionMode = mode;
   if (osc.currentIniConfig) {
-    const sectionParams = osc.currentIniConfig.getSection(mode);
+    // XRAM в PAGES не участвует. При переключении на XRAM осциллограф
+    // не должен показывать параметры (в этом INI содержимое XRAM
+    // дублирует RAM, из-за чего выглядело как «параметры RAM»).
+    if (mode === 'XRAM') {
+      await osc.applyChannelConfigs([]);
+      return;
+    }
+    // При переключении на RAM учитываем фильтр по активной странице [PAGES].
+    const allParams = osc.currentIniConfig.getSection(mode);
+    const sectionParams = filterIniParamsByActivePage(mode, allParams);
     const channelConfigs = iniParamsToChannelConfigs(sectionParams);
     await osc.applyChannelConfigs(channelConfigs);
   }
@@ -161,6 +176,8 @@ export function setActiveIni(osc: Oscilloscope, id: string, loadContent: boolean
  */
 export function getSectionChannels(osc: Oscilloscope, mode: 'RAM' | 'XRAM'): Channel[] {
   if (osc.isDestroyed) return [];
+  // XRAM в PAGES не участвует — предварительный список каналов для XRAM пуст.
+  if (mode === 'XRAM') return [];
   const iniConfig = osc.currentIniConfig;
   if (!iniConfig) return [];
   const params = iniConfig.getSection(mode);
