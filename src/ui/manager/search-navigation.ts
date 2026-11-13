@@ -20,12 +20,35 @@ import { initHelpUI, showHelpWindow } from '../help-ui.js';
 import { SearchPanel } from '../../oscilloscope/ui/SearchPanel.js';
 import { hasAnyDirty } from '../../ini-manager/dirty-tracker.js';
 import { renderModbusTable } from '../tree.js';
+import { iniParamsToChannelConfigs } from '../../core/ini/index.js';
 import {
   setActiveIniPage,
   clearActiveIniPage,
   beginPageSectionChange,
   endPageSectionChange,
+  filterIniParamsByActivePage,
 } from './active-page-filter.js';
+
+/**
+ * Пересобирает каналы осциллографа с учётом активной страницы [PAGES].
+ * Вызывать после setActiveIniPage(...) и после clearActiveIniPage().
+ * Если осциллограф ещё не инициализирован или INI не загружен — no-op.
+ */
+function refreshOscChannelsByActivePage(): void {
+  const osc = window.osc;
+  if (!osc || typeof osc.applyChannelConfigs !== 'function') return;
+  const cfg = (osc as unknown as { currentIniConfig?: { getSection: (m: string) => any[] } | null }).currentIniConfig;
+  const mode = (osc as unknown as { currentSectionMode?: 'RAM' | 'XRAM' }).currentSectionMode;
+  if (!cfg || !mode) return;
+  try {
+    const allParams = cfg.getSection(mode);
+    const filtered = filterIniParamsByActivePage(mode, allParams);
+    const channelConfigs = iniParamsToChannelConfigs(filtered);
+    void osc.applyChannelConfigs(channelConfigs as never);
+  } catch (err) {
+    console.error('[PagesMenu] Ошибка пересборки каналов осциллографа:', err);
+  }
+}
 
 interface SearchNavigationUIDeps {
   appState: AppState;
@@ -187,33 +210,38 @@ export function initSearchNavigationUI(deps: SearchNavigationUIDeps): void {
   // Клик по основной части (знак вопроса) — сразу "Поиск места установки"
   treeSearchMainBtn?.addEventListener('click', openTreeSearchOverlay);
 
- // Клик по треугольнику меню страниц — показать/скрыть меню
-  pagesDropdownBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    
-    // Динамически наполняем меню страницами, если есть загруженный конфиг
-    if (pagesMenu && currentIniConfig && currentIniConfig.pages) {
-      pagesMenu.innerHTML = '';
-      if (currentIniConfig.pages.length === 0) {
-        const emptyItem = document.createElement('div');
-        emptyItem.className = 'dropdown-item disabled';
-        emptyItem.textContent = 'Нет доступных страниц';
-        pagesMenu.appendChild(emptyItem);
-      } else {
-        currentIniConfig.pages.forEach((page) => {
-          const item = document.createElement('div');
-          item.className = 'dropdown-item';
-          item.style.cursor = 'pointer';
-          item.style.userSelect = 'none';
-          item.setAttribute('data-page-id', page.id);
-          item.textContent = page.name || page.id;
-          pagesMenu.appendChild(item);
-        });
-      }
-    }
+  // Клик по треугольнику меню страниц — показать/скрыть меню
+ pagesDropdownBtn?.addEventListener('click', (e) => {
+   e.stopPropagation();
+   
+   // Динамически наполняем меню страницами, если есть загруженный конфиг
+   if (pagesMenu && currentIniConfig && currentIniConfig.pages) {
+     pagesMenu.innerHTML = '';
 
-    pagesMenu?.classList.toggle('show');
-  });
+     // Первым пунктом всегда — "Показать все"
+     const allItem = document.createElement('div');
+     allItem.className = 'dropdown-item';
+     allItem.style.cursor = 'pointer';
+     allItem.style.userSelect = 'none';
+     allItem.setAttribute('data-page-id', '__all__');
+     allItem.textContent = 'Показать все';
+     pagesMenu.appendChild(allItem);
+
+     if (currentIniConfig.pages.length > 0) {
+       currentIniConfig.pages.forEach((page) => {
+         const item = document.createElement('div');
+         item.className = 'dropdown-item';
+         item.style.cursor = 'pointer';
+         item.style.userSelect = 'none';
+         item.setAttribute('data-page-id', page.id);
+         item.textContent = page.name || page.id;
+         pagesMenu.appendChild(item);
+       });
+     }
+   }
+
+   pagesMenu?.classList.toggle('show');
+ });
 
    // Клик по пункту меню страниц
  pagesMenu?.addEventListener('click', (e) => {
@@ -229,11 +257,20 @@ export function initSearchNavigationUI(deps: SearchNavigationUIDeps): void {
 
    if (!currentIniConfig) return;
 
+   // "Показать все" — снимаем фильтр, показываем все параметры секции.
+   if (pageId === '__all__') {
+     clearActiveIniPage();
+     renderModbusTable(currentIniConfig, window.appState);
+     refreshOscChannelsByActivePage();
+     return;
+   }
+
    const page = currentIniConfig.pages.find((p: IniPage) => p.id === pageId);
    if (!page || page.items.length === 0) {
      // Нет состава страницы — снимаем фильтр, показываем всё.
      clearActiveIniPage();
      renderModbusTable(currentIniConfig, window.appState);
+     refreshOscChannelsByActivePage();
      return;
    }
 
@@ -242,6 +279,7 @@ export function initSearchNavigationUI(deps: SearchNavigationUIDeps): void {
    // которая сейчас активна.
    setActiveIniPage(page);
    renderModbusTable(currentIniConfig, window.appState);
+   refreshOscChannelsByActivePage();
  });
 
   // Закрыть меню страниц при клике вне его

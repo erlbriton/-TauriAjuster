@@ -6,6 +6,7 @@ import { addDeviceToRegistry, deviceRegistry, setCurrentIniConfig, updateDeviceI
 import type { RawIniConfig, DeviceRegistryItem } from './tree-core.js';
 import { renderModbusTable } from '../ui/tree.js';
 import { IniParser as CoreIniParser, IniConfig, iniParamsToChannelConfigs } from '../core/ini/index.js';
+import { filterIniParamsByActivePage } from '../ui/manager/active-page-filter.js';
 import type { AppState } from '../core/app-state.js';
 import { decodeTextBuffer } from './textFileReader.js';
 import { serialManager } from '../serial/serial-manager.js';
@@ -120,7 +121,9 @@ export async function processSingleFileContent(
     const osc = window.osc;
     if (osc && typeof osc.applyChannelConfigs === 'function') {
       try {
-        const sectionParams = iniConfig.getSection(osc.currentSectionMode);
+        const allParams = iniConfig.getSection(osc.currentSectionMode);
+        // Если выбрана страница [PAGES] — фильтруем по её составу.
+        const sectionParams = filterIniParamsByActivePage(osc.currentSectionMode, allParams);
         const channelConfigs = iniParamsToChannelConfigs(sectionParams);
         await osc.applyChannelConfigs(channelConfigs);
         // Сохраняем распарсенный конфиг в осциллографе: по нему

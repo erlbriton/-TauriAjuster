@@ -13,6 +13,7 @@ import {
   IniConfig,
   iniParamsToChannelConfigs,
 } from "../../core/ini/index.js";
+import { filterIniParamsByActivePage } from "../../ui/manager/active-page-filter.js";
 import {
   renderVisibleChannels,
   syncViewPositions,
@@ -95,7 +96,9 @@ export async function loadIniContent(osc: Oscilloscope, iniContent: string): Pro
     const iniConfig = new IniConfig(parseResult);
     // Секция берётся из текущего режима (RAM/XRAM), переключаемого
     // кнопками в окне «Свойства просмотра параметров».
-    const sectionParams = iniConfig.getSection(osc.currentSectionMode);
+    const allParams = iniConfig.getSection(osc.currentSectionMode);
+    // Если выбрана страница [PAGES] — фильтруем по её составу.
+    const sectionParams = filterIniParamsByActivePage(osc.currentSectionMode, allParams);
     const channelConfigs = iniParamsToChannelConfigs(sectionParams);
     await osc.applyChannelConfigs(channelConfigs);
     osc.currentIniConfig = iniConfig;
