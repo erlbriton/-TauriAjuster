@@ -51,6 +51,7 @@ export function planControllerWrite(
     subRaw: string,
     bytePosRaw: string = '',
 ): ControllerWritePlan {
+    console.log('[PLAN_DEBUG]', { dataTypeRaw, editType, valueStr, scale, subRaw, bytePosRaw });
     const dataType = dataTypeRaw.toUpperCase();
     if (!CONTROLLER_EDITABLE_TYPES.has(dataType)) return { ok: false };
 
@@ -108,7 +109,7 @@ export function planControllerWrite(
             kind: 'byte',
             byteValue: raw,
             bytePos: bytePos as 'L' | 'H',
-            newPhys: String(valNum),
+            newPhys: valueStr,
         };
     }
 
@@ -143,7 +144,8 @@ export function planControllerWrite(
             const signed = parsed > 0x7FFFFFFF ? parsed - 0x100000000 : parsed;
             newPhys = String(signed * safeScale);
         } else {
-            const signed = parsed > 0x7FFF ? parsed - 0x10000 : parsed;
+            // TWORD и другие unsigned типы не должны уходить в минус
+            const signed = isSigned16 && parsed > 0x7FFF ? parsed - 0x10000 : parsed;
             newPhys = String(signed * safeScale);
         }
 
@@ -166,7 +168,7 @@ export function planControllerWrite(
             kind: 'bit',
             bitIndex: isNaN(bitIndex) ? 0 : bitIndex,
             bitValue,
-            newPhys: String(bitValue),
+            newPhys: valueStr,
         };
     }
 
@@ -183,7 +185,7 @@ export function planControllerWrite(
             kind: 'words',
             words: [rawInt & 0xFFFF, (rawInt >>> 16) & 0xFFFF],
             newHex: 'x' + hexStr,
-            newPhys: String(valNum),
+            newPhys: valueStr,
         };
     }
 
@@ -196,7 +198,7 @@ export function planControllerWrite(
             kind: 'words',
             words: [unsigned & 0xFFFF, (unsigned >>> 16) & 0xFFFF],
             newHex: 'x' + unsigned.toString(16).toUpperCase().padStart(8, '0'),
-            newPhys: String(valNum),
+            newPhys: valueStr,
         };
     }
 
@@ -210,10 +212,10 @@ export function planControllerWrite(
             kind: 'words',
             words: [word],
             newHex: 'x' + word.toString(16).toUpperCase().padStart(4, '0'),
-            newPhys: String(valNum),
+            newPhys: valueStr,
         };
     }
-    // Unsigned 16-бит
+    // Unsigned 16-бит (TWORD и др.)
     if (raw < 0 || raw > 65535) return { ok: false };
     const word = raw & 0xFFFF;
     return {
@@ -221,6 +223,6 @@ export function planControllerWrite(
         kind: 'words',
         words: [word],
         newHex: 'x' + word.toString(16).toUpperCase().padStart(4, '0'),
-        newPhys: String(valNum),
+        newPhys: valueStr,
     };
 }

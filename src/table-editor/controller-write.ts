@@ -94,8 +94,17 @@ export async function processControllerWrite(
 
     let scale = 1.0;
     if (parts.length > 6 && parts[6]) {
-        const parsedScale = parseFloat(parts[6].replace(',', '.'));
-        if (!isNaN(parsedScale) && parsedScale !== 0) scale = parsedScale;
+        const rawScaleKey = parts[6].trim();
+        const iniVars = stateObj?.currentIniConfig?.vars;
+        if (iniVars && Object.prototype.hasOwnProperty.call(iniVars, rawScaleKey)) {
+            const varScale = iniVars[rawScaleKey];
+            if (typeof varScale === "number" && isFinite(varScale) && varScale !== 0) {
+                scale = varScale;
+            }
+        } else {
+            const parsedScale = parseFloat(rawScaleKey.replace(',', '.'));
+            if (!isNaN(parsedScale) && parsedScale !== 0) scale = parsedScale;
+        }
     }
 
     let bytePos = '';
@@ -103,6 +112,14 @@ export async function processControllerWrite(
         bytePos = (sub || '').toUpperCase();
     }
 
+    console.log('[SCALE_DBG]', {
+        key: tr.getAttribute('data-key'),
+        reg: tr.getAttribute('data-reg'),
+        partsLen: parts.length,
+        parts6: parts[6],
+        scale,
+        hasVars: Boolean(stateObj?.currentIniConfig?.vars),
+    });
     const plan = planControllerWrite(dataType, editType, newValueStr, scale, sub, bytePos);
 
     // Диагностика для TBYTE и TPRMLIST
@@ -207,7 +224,6 @@ export async function processControllerWrite(
         try { parts = JSON.parse(tr.dataset.parts || '[]'); } catch { parts = []; }
 
         if (plan.newHex) {
-            if (parts.length > 6) parts[6] = plan.newHex;
             updateCellDisplay(tds[6], plan.newHex);
         }
         if (plan.newPhys) {
