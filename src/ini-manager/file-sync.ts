@@ -11,17 +11,20 @@ import { invoke } from '@tauri-apps/api/core';
 import { IniParser as CoreIniParser, IniConfig } from '../core/ini/index.js';
 import type { AppState } from '../core/app-state.js';
 
-import { fileStore, getFileStore } from './file-store.js';
+import { fileStore, getFileStore, getCurrentIniFilePath } from './file-store.js';
 import { syncFilesToOscilloscope } from './file-loader.js';
 import { decodeTextBuffer } from './textFileReader.js';
 import { registerDeviceFromHeader } from './header-loader.js';
 import {
     deviceRegistry,
+    setCurrentIniConfig,
     updateDeviceInRegistry,
     removeDeviceFromRegistry,
 } from './tree-core.js';
 import type { RawIniConfig } from './tree-core.js';
 import { renderDeviceTree } from './tree-ui.js';
+import { populateDeviceForm } from '../ui/ui.js';
+import { renderModbusTable } from '../ui/tree.js';
 
 /**
  * Описание одного файла, которое возвращает Rust-команда scan_devices_folder.
@@ -57,13 +60,12 @@ interface DiskIniFileInfo {
  *           lastModified, iniConfig в реестре (через updateDeviceInRegistry).
  *  3. Для каждого файла на диске, которого ещё нет в fileStore, —
  *     добавляет его через processSingleFileContent (как при старте приложения).
- *  4. Перерисовывает дерево, если были изменения.
+ *  4. Перерисовывает дерево и при изменении открытого файла перерисовывает форму и таблицу.
  *
  * Не делает:
  *  - НЕ переименовывает папки под Location (это отдельная задача-миграция);
  *  - НЕ трогает флаг isBackup в deviceRegistry (это состояние UI, а не
- *    свойство файла);
- *  - НЕ трогает currentIniContent/currentIniConfig приложения.
+ *    свойство файла).
  *
  * Возвращает статистику: added/updated/removed/unchanged/errors.
  */
@@ -152,6 +154,14 @@ export async function resyncDevicesFromDisk(appState: AppState): Promise<{
     for (const [key, entry] of store.entries()) {
         if (entry.path) pathToKey.set(entry.path, key);
     }
+
+    const activeFilePath = getCurrentIniFilePath();
+    let refreshedOpenFile: {
+        iniConfig: IniConfig;
+        rawConfig: RawIniConfig;
+        content: string;
+        id: string;
+    } | null = null;
 
     // ─── Шаг 4: обрабатываем файлы, которые есть на диске ───────────────────
     const seenPaths = new Set<string>();
@@ -291,6 +301,15 @@ export async function resyncDevicesFromDisk(appState: AppState): Promise<{
                 }
             }
 
+            if (activeFilePath && fullPath === activeFilePath) {
+                refreshedOpenFile = {
+                    iniConfig: newIniConfig,
+                    rawConfig: newRawConfig,
+                    content: fullContent,
+                    id: String(newId),
+                };
+            }
+
             result.updated++;
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -311,6 +330,24 @@ export async function resyncDevicesFromDisk(appState: AppState): Promise<{
     if (result.added > 0 || result.updated > 0 || result.removed > 0) {
         renderDeviceTree();
         syncFilesToOscilloscope();
+    }
+
+    if (refreshedOpenFile) {
+        appState.currentIniContent = refreshedOpenFile.content;
+        appState.currentIniConfig = refreshedOpenFile.iniConfig;
+        setCurrentIniConfig(refreshedOpenFile.iniConfig);
+
+        if (refreshedOpenFile.rawConfig['DEVICE']) {
+            populateDeviceForm(refreshedOpenFile.rawConfig['DEVICE']);
+        }
+
+        renderModbusTable(refreshedOpenFile.iniConfig, appState);
+
+        if (window.osc && typeof window.osc.setActiveIni === 'function') {
+            window.osc.setActiveIni(refreshedOpenFile.id);
+        }
+
+        window.dispatchEvent(new CustomEvent('app:ini-file-loaded'));
     }
 
     console.log(
