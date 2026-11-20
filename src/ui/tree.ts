@@ -316,7 +316,7 @@ export function renderModbusTable(config?: IniConfig, appState?: TableEditorStat
     if (typeof window.initTableResizers === 'function') {
         window.initTableResizers();
     }
-}///////////////////////////////////////////////////////////////////////////////////////////////////////\
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     const modeSelect = document.querySelector<HTMLSelectElement>('.toolbar-device-mode-select');

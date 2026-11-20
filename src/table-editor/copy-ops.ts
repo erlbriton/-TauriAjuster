@@ -36,8 +36,46 @@ export function copyControllerToBase(): number {
         baseHex.innerHTML = ctrlHex.innerHTML;
         basePhys.innerHTML = ctrlPhys.innerHTML;
 
-        // Пересчитываем подсветку расхождения (после копирования — совпадает, станет чёрной)
+        // Синхронизируем parts[hexIndex], чтобы saveIniChanges увидел изменение
+        let parts: string[] = [];
+        try {
+            parts = JSON.parse(tr.dataset.parts || '[]');
+        } catch {
+            parts = [];
+        }
+
+        const hexIndex = parseInt(tr.getAttribute('data-hex-index') || '-1', 10);
         const dataType = (tr.getAttribute('data-type') || '').toUpperCase();
+
+        if (hexIndex >= 0 && hexIndex < parts.length) {
+            if (dataType === 'TPRMLIST') {
+                const physText = (basePhys.textContent || '').trim();
+                for (const p of parts) {
+                    const part = (p || '').trim();
+                    if (part.includes('#')) {
+                        const [h, t] = part.split('#');
+                        if (h && t && t.trim() === physText) {
+                            parts[hexIndex] = h.trim();
+                            break;
+                        }
+                    }
+                }
+            } else {
+                const newHexText = (baseHex.textContent || '').trim();
+                if (newHexText && newHexText !== '—') {
+                    const existingPart = (parts[hexIndex] || '').trim();
+                    const normalizedHex = newHexText.startsWith('x') || newHexText.startsWith('X')
+                        ? 'x' + newHexText.slice(1)
+                        : existingPart.startsWith('x')
+                            ? 'x' + newHexText
+                            : newHexText;
+                    parts[hexIndex] = normalizedHex;
+                }
+            }
+            tr.dataset.parts = JSON.stringify(parts);
+        }
+
+        // Пересчитываем подсветку расхождения (после копирования — совпадает, станет чёрной)
         updateMismatchClass(tr, dataType);
 
         copied++;
